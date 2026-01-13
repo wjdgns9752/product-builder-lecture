@@ -246,6 +246,16 @@ submitEvalBtn.addEventListener('click', () => {
   if (selectedRating === null) return;
 
   console.log(`User evaluated noise event: ${selectedRating}/10`);
+
+  // Integration: Send data to the remote server
+  fetch('https://product-builder-lecture-35x.pages.dev/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      rating: parseInt(selectedRating, 10),
+      timestamp: Date.now()
+    })
+  }).catch(err => console.error('Integration error:', err));
   
   hideEvaluationModal();
   

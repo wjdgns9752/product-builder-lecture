@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Noise Monitor</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" href="data:,">
+</head>
+<body>
+    <div class="container">
+        <h1>소음 모니터링</h1>
+        
+        <canvas id="visualizer" width="600" height="150"></canvas>
+        
+        <div class="status-panel">
+            <h2 id="status-text">상태: 대기 중</h2>
+            
+            <div class="info-text">
+                <span>현재 소음: <span id="current-vol">0</span></span>
+                <span>배경 소음: <span id="bg-vol">0</span></span>
+            </div>
+            
+            <div class="meter-container">
+                <div id="bg-marker"></div>
+                <div id="meter-bar"></div>
+            </div>
+
+            <div class="duration-container">
+                <div class="duration-label">지속 시간 감지</div>
+                <div class="duration-track">
+                    <div id="duration-bar"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button id="init-btn">모니터링 시작</button>
+        </div>
+
+        <div class="settings">
+            <h3>설정</h3>
+            <div class="desc">임계값 조절 (배경 소음 대비 % 증가량)</div>
+            <input type="range" id="threshold" min="10" max="100" value="50">
+            <div>설정값: <span id="threshold-val">50</span>%</div>
+            
+            <br>
+            <label>
+                <input type="checkbox" id="audio-alarm" checked>
+                알림음 켜기
+            </label>
+        </div>
+
+        <button id="theme-toggle" class="theme-btn">테마 변경</button>
+    </div>
+
+    <!-- Evaluation Modal -->
+    <div id="evaluation-modal" class="modal hidden">
+        <div class="modal-content">
+            <h2>소음 평가</h2>
+            <p>방금 발생한 소음이 얼마나 거슬렸나요?</p>
+            <div class="rating-scale">
+                <button class="rate-btn" data-val="1">1</button>
+                <button class="rate-btn" data-val="2">2</button>
+                <button class="rate-btn" data-val="3">3</button>
+                <button class="rate-btn" data-val="4">4</button>
+                <button class="rate-btn" data-val="5">5</button>
+                <button class="rate-btn" data-val="6">6</button>
+                <button class="rate-btn" data-val="7">7</button>
+                <button class="rate-btn" data-val="8">8</button>
+                <button class="rate-btn" data-val="9">9</button>
+                <button class="rate-btn" data-val="10">10</button>
+            </div>
+            <div class="selected-rating">선택함: <span id="selected-val">-</span></div>
+            <button id="submit-eval" disabled>제출 및 계속하기</button>
+        </div>
+    </div>
+
+    <script src="main.js"></script>
+</body>
+</html>
