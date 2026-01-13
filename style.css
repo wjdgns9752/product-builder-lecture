@@ -1,1 +1,22 @@
-/* Add styles here */
+:root {
+  --bg-color: #ffffff;
+  --text-color: #000000;
+}
+
+.dark-mode {
+  --bg-color: #121212;
+  --text-color: #ffffff;
+}
+
+body {
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  font-family: sans-serif;
+  transition: background-color 0.3s, color 0.3s;
+}
+
+#theme-toggle {
+  margin: 10px 0;
+  padding: 8px 16px;
+  cursor: pointer;
+}
