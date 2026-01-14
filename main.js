@@ -33,8 +33,7 @@ const body = document.body;
 
 // Calibration Elements
 const realDbInput = document.getElementById('real-db-input');
-const autoCalibBtn = document.getElementById('auto-calib-btn'); // New
-// const calibFileUpload = document.getElementById('calib-file-upload'); // Removed
+const autoCalibBtn = document.getElementById('auto-calib-btn');
 const currentRawDbSpan = document.getElementById('current-raw-db');
 const saveCalibBtn = document.getElementById('save-calib');
 const cancelCalibBtn = document.getElementById('cancel-calib');
@@ -42,74 +41,70 @@ const calibBtn = document.getElementById('calibration-btn');
 const calibModal = document.getElementById('calibration-modal');
 const playNoiseBtn = document.getElementById('play-noise-btn');
 
-// ... (Evaluation Modal Elements remain same)
+// Evaluation Modal Elements
+const modal = document.getElementById('evaluation-modal');
+const rateBtns = document.querySelectorAll('.rate-btn');
+const submitEvalBtn = document.getElementById('submit-eval');
+const selectedValSpan = document.getElementById('selected-val');
 
-// ... (Survey Elements remain same)
+// Survey Elements
+const chipGroups = {
+    activity: document.querySelectorAll('.chip[data-type="activity"]'),
+    source: document.querySelectorAll('.chip[data-type="source"]')
+};
+let surveyData = {
+    activity: null,
+    source: null
+};
 
-// ... (State Variables remain same)
+// State Variables
+let audioContext;
+let analyser;
+let microphone;
+let isMonitoring = false;
+let isPausedForEval = false; 
+let selectedRating = null;
+let currentVolumeValue = 0; 
+
+// Calibration State
+let dbOffset = parseFloat(localStorage.getItem('dbOffset')) || 0; 
+let noiseNode = null; 
+let isPlayingNoise = false;
+
+// Duration Logic
+let noiseStartTime = 0;
+const TRIGGER_DURATION_MS = 2000; 
+let lastEvalTime = 0;
+const GRACE_PERIOD_MS = 3000; 
+
+// Background Noise Tracking (in dB)
+let backgroundLevel = 40; // Default est. dB
+const adaptationRate = 0.005; 
+const decayRate = 0.05;      
+
+// Visualizer State
+let tempCanvas = document.createElement('canvas');
+let tempCtx = tempCanvas.getContext('2d');
+tempCanvas.width = canvas.width;
+tempCanvas.height = canvas.height;
+
+// --- Theme Logic ---
+const currentTheme = localStorage.getItem('theme');
+if (currentTheme === 'dark') {
+  body.classList.add('dark-mode');
+}
+themeToggleBtn.addEventListener('click', () => {
+  body.classList.toggle('dark-mode');
+  const theme = body.classList.contains('dark-mode') ? 'dark' : 'light';
+  localStorage.setItem('theme', theme);
+});
 
 // --- Settings Logic ---
 thresholdSlider.addEventListener('input', (e) => {
   thresholdVal.textContent = e.target.value;
 });
 
-// --- Auto Calibration Logic (Loopback) ---
-autoCalibBtn.addEventListener('click', async () => {
-    if (!audioContext) await startAudio();
-    if (audioContext.state === 'suspended') await audioContext.resume();
-
-    autoCalibBtn.disabled = true;
-    autoCalibBtn.textContent = "⏳ 측정 중... (소리 유지)";
-    
-    // 1. Start Noise
-    if (!isPlayingNoise) playPinkNoise();
-
-    // 2. Wait for stabilization (1s)
-    setTimeout(() => {
-        // 3. Measure for 3 seconds
-        let sumDb = 0;
-        let samples = 0;
-        
-        const measurementInterval = setInterval(() => {
-            const rawDb = parseFloat(currentRawDbSpan.textContent);
-            if (!isNaN(rawDb) && rawDb > -100) {
-                sumDb += rawDb;
-                samples++;
-            }
-        }, 100);
-
-        setTimeout(() => {
-            clearInterval(measurementInterval);
-            stopPinkNoise();
-            
-            if (samples > 0) {
-                const avgRawDb = sumDb / samples;
-                // Heuristic: Max Volume Phone ~ 75dB SPL
-                const referenceSPL = 75; 
-                const newOffset = referenceSPL - avgRawDb;
-                
-                dbOffset = newOffset;
-                localStorage.setItem('dbOffset', dbOffset);
-                
-                alert(`[자동 보정 완료]\n평균 입력: ${avgRawDb.toFixed(1)} dBFS\n기준 출력: ${referenceSPL} dB\n보정값: ${newOffset.toFixed(1)} dB\n\n저장되었습니다.`);
-                calibModal.classList.add('hidden');
-            } else {
-                alert("측정 오류: 마이크 입력을 확인해주세요.");
-            }
-            
-            autoCalibBtn.disabled = false;
-            autoCalibBtn.textContent = "🚀 자동 보정 시작";
-        }, 3000); // Measure for 3s
-        
-    }, 1000); // Warmup 1s
-});
-
-// --- Audio Initialization ---
-initBtn.addEventListener('click', async () => {
-  if (isMonitoring) return;
-  await startAudio();
-});
-
+// --- Audio Functions (Moved Up for Safety) ---
 async function startAudio() {
   try {
     if (!audioContext) {
@@ -132,14 +127,97 @@ async function startAudio() {
     isMonitoring = true;
     statusText.textContent = "상태: 모니터링 중...";
     
+    // Start Analysis Loop
     analyze();
     drawSpectrogram();
     
+    return true; // Success
   } catch (err) {
     console.error('Error accessing microphone:', err);
-    alert('마이크에 접근할 수 없습니다. 권한을 허용해주세요.');
+    alert('마이크에 접근할 수 없습니다. 브라우저 설정에서 마이크 권한을 허용해주세요.');
+    return false; // Failed
   }
 }
+
+// --- Auto Calibration Logic (Loopback) ---
+autoCalibBtn.addEventListener('click', async () => {
+    console.log("Auto Calibration Started");
+    
+    // Ensure Audio Context is Ready
+    if (!audioContext || audioContext.state === 'suspended') {
+        const success = await startAudio();
+        if (!success) {
+            console.error("Failed to start audio for calibration");
+            return;
+        }
+    }
+
+    // Update UI
+    autoCalibBtn.disabled = true;
+    autoCalibBtn.textContent = "⏳ 측정 중... (최대 볼륨 유지)";
+    
+    try {
+        // 1. Start Noise if not playing
+        if (!isPlayingNoise) playPinkNoise();
+
+        // 2. Wait for stabilization (1s)
+        setTimeout(() => {
+            // 3. Measure for 3 seconds
+            let sumDb = 0;
+            let samples = 0;
+            
+            const measurementInterval = setInterval(() => {
+                // Read from the global calculated value, not the DOM for better precision
+                // But currentVolumeValue is already calibrated, we need RAW value.
+                // We can recalculate raw from currentVolumeValue or use the DOM span which shows raw.
+                // Let's use the DOM span as it's updated in analyze() with rawDb.
+                const rawDb = parseFloat(currentRawDbSpan.textContent);
+                
+                if (!isNaN(rawDb) && rawDb > -100) {
+                    sumDb += rawDb;
+                    samples++;
+                }
+            }, 100);
+
+            setTimeout(() => {
+                clearInterval(measurementInterval);
+                stopPinkNoise();
+                
+                if (samples > 5) { // At least some valid samples
+                    const avgRawDb = sumDb / samples;
+                    // Heuristic: Max Volume Phone ~ 75dB SPL
+                    const referenceSPL = 75; 
+                    const newOffset = referenceSPL - avgRawDb;
+                    
+                    dbOffset = newOffset;
+                    localStorage.setItem('dbOffset', dbOffset);
+                    
+                    alert(`[자동 보정 완료]\n평균 입력: ${avgRawDb.toFixed(1)} dBFS\n기준 출력: ${referenceSPL} dB\n보정값: ${newOffset.toFixed(1)} dB\n\n설정이 저장되었습니다.`);
+                    calibModal.classList.add('hidden');
+                } else {
+                    alert("측정된 소리가 너무 작거나 없습니다.\n마이크 권한을 확인하거나 볼륨을 키워주세요.");
+                }
+                
+                // Reset UI
+                autoCalibBtn.disabled = false;
+                autoCalibBtn.textContent = "🚀 자동 보정 시작";
+            }, 3000); // Measure for 3s
+            
+        }, 1000); // Warmup 1s
+    } catch (e) {
+        console.error("Calibration Error:", e);
+        alert("보정 중 오류가 발생했습니다.");
+        autoCalibBtn.disabled = false;
+        autoCalibBtn.textContent = "🚀 자동 보정 시작";
+        stopPinkNoise();
+    }
+});
+
+// --- Audio Initialization Button ---
+initBtn.addEventListener('click', async () => {
+  if (isMonitoring) return;
+  await startAudio();
+});
 
 // --- Analysis Loop ---
 function analyze() {
