@@ -619,11 +619,6 @@ function checkSubmitReady() {
 submitEvalBtn.addEventListener('click', async () => {
   if (selectedRating === null) return;
   
-  // Auto-download the labeled file for training data
-  if (downloadLink.href) {
-      downloadLink.click();
-  }
-
   try {
     const profile = JSON.parse(localStorage.getItem('user_profile')) || {};
     const payload = {
