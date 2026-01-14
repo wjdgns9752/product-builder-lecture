@@ -170,6 +170,39 @@ async function startAudio() {
   }
 }
 
+// --- Device Detection Helper ---
+function getDeviceReferenceSPL() {
+    const ua = navigator.userAgent;
+    let model = "Unknown Device";
+    let refSPL = 75; // Default Baseline
+
+    // 1. Detect Model
+    if (/iPhone|iPad|iPod/.test(ua)) {
+        model = "Apple iPhone/iPad";
+        refSPL = 79; // Newer iPhones have loud stereo speakers
+    } else {
+        // Try to find Android Model (e.g., "SM-S908N")
+        const match = ua.match(/;\s([^;]+)\sBuild/);
+        if (match) {
+            model = match[1].trim();
+            
+            // 2. Apply Heuristics for Android
+            if (model.includes("SM-S") || model.includes("SM-G") || model.includes("SM-N") || model.includes("SM-F")) {
+                // Samsung Flagship (S, Note, Fold/Flip)
+                refSPL = 78;
+            } else if (model.includes("SM-A") || model.includes("SM-M")) {
+                // Samsung Mid-range
+                refSPL = 74;
+            } else if (model.toLowerCase().includes("pixel")) {
+                // Google Pixel
+                refSPL = 77;
+            }
+        }
+    }
+    
+    return { model, refSPL };
+}
+
 // --- Auto Calibration Logic (Loopback) ---
 autoCalibBtn.addEventListener('click', async () => {
     console.log("Auto Calibration Started");
@@ -177,18 +210,22 @@ autoCalibBtn.addEventListener('click', async () => {
     // Ensure Audio Context is Ready
     if (!audioContext || audioContext.state === 'suspended') {
         const success = await startAudio();
-        if (!success) {
-            console.error("Failed to start audio for calibration");
-            return;
-        }
+        if (!success) return;
     }
+
+    // Set Flag
+    isCalibrating = true;
+
+    // Detect Device & Reference SPL
+    const { model, refSPL } = getDeviceReferenceSPL();
+    const referenceSPL = refSPL; // Use detected value
 
     // Update UI
     autoCalibBtn.disabled = true;
-    autoCalibBtn.textContent = "⏳ 측정 중... (최대 볼륨 유지)";
+    autoCalibBtn.textContent = `⏳ 측정 중... (기기: ${model})`;
     
     try {
-        // 1. Start Noise if not playing
+        // 1. Start Noise
         if (!isPlayingNoise) playPinkNoise();
 
         // 2. Wait for stabilization (1s)
@@ -198,12 +235,7 @@ autoCalibBtn.addEventListener('click', async () => {
             let samples = 0;
             
             const measurementInterval = setInterval(() => {
-                // Read from the global calculated value, not the DOM for better precision
-                // But currentVolumeValue is already calibrated, we need RAW value.
-                // We can recalculate raw from currentVolumeValue or use the DOM span which shows raw.
-                // Let's use the DOM span as it's updated in analyze() with rawDb.
                 const rawDb = parseFloat(currentRawDbSpan.textContent);
-                
                 if (!isNaN(rawDb) && rawDb > -100) {
                     sumDb += rawDb;
                     samples++;
@@ -214,32 +246,29 @@ autoCalibBtn.addEventListener('click', async () => {
                 clearInterval(measurementInterval);
                 stopPinkNoise();
                 
-                if (samples > 5) { // At least some valid samples
+                if (samples > 5) { 
                     const avgRawDb = sumDb / samples;
-                    // Heuristic: Max Volume Phone ~ 75dB SPL
-                    const referenceSPL = 75; 
                     const newOffset = referenceSPL - avgRawDb;
                     
                     dbOffset = newOffset;
                     localStorage.setItem('dbOffset', dbOffset);
                     
-                    alert(`[자동 보정 완료]\n평균 입력: ${avgRawDb.toFixed(1)} dBFS\n기준 출력: ${referenceSPL} dB\n보정값: ${newOffset.toFixed(1)} dB\n\n설정이 저장되었습니다.`);
+                    alert(`[정밀 자동 보정 완료]\n\n📱 감지된 기기: ${model}\n🔊 기준 출력 적용: ${referenceSPL} dB\n\n🎤 평균 입력: ${avgRawDb.toFixed(1)} dBFS\n✅ 최종 보정값: ${newOffset.toFixed(1)} dB`);
                     calibModal.classList.add('hidden');
                 } else {
-                    alert("측정된 소리가 너무 작거나 없습니다.\n마이크 권한을 확인하거나 볼륨을 키워주세요.");
+                    alert("측정된 소리가 너무 작습니다. 볼륨을 최대로 했는지 확인해주세요.");
                 }
                 
-                // Reset UI
                 autoCalibBtn.disabled = false;
                 autoCalibBtn.textContent = "🚀 자동 보정 시작";
-            }, 3000); // Measure for 3s
+                isCalibrating = false; 
+            }, 3000); 
             
-        }, 1000); // Warmup 1s
+        }, 1000); 
     } catch (e) {
-        console.error("Calibration Error:", e);
-        alert("보정 중 오류가 발생했습니다.");
+        console.error(e);
         autoCalibBtn.disabled = false;
-        autoCalibBtn.textContent = "🚀 자동 보정 시작";
+        isCalibrating = false;
         stopPinkNoise();
     }
 });
