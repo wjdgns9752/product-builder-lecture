@@ -114,7 +114,21 @@ async function startAudio() {
       await audioContext.resume();
     }
 
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    // Critical: Disable built-in audio processing for accurate loopback measurement
+    const constraints = {
+        audio: {
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false,
+            googEchoCancellation: false,
+            googAutoGainControl: false,
+            googNoiseSuppression: false,
+            googHighpassFilter: false
+        },
+        video: false
+    };
+
+    const stream = await navigator.mediaDevices.getUserMedia(constraints);
     
     microphone = audioContext.createMediaStreamSource(stream);
     analyser = audioContext.createAnalyser();
@@ -134,8 +148,25 @@ async function startAudio() {
     return true; // Success
   } catch (err) {
     console.error('Error accessing microphone:', err);
-    alert('마이크에 접근할 수 없습니다. 브라우저 설정에서 마이크 권한을 허용해주세요.');
-    return false; // Failed
+    // Fallback: Try simple constraints if advanced ones fail
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        microphone = audioContext.createMediaStreamSource(stream);
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 2048; 
+        analyser.smoothingTimeConstant = 0.6; 
+        microphone.connect(analyser);
+        initBtn.style.display = 'none';
+        isMonitoring = true;
+        statusText.textContent = "상태: 모니터링 중... (기본 모드)";
+        analyze();
+        drawSpectrogram();
+        return true;
+    } catch (fallbackErr) {
+        console.error('Fallback failed:', fallbackErr);
+        alert('마이크 권한을 허용해야 소리를 측정할 수 있습니다. 브라우저 설정에서 권한을 확인해주세요.');
+        return false;
+    }
   }
 }
 
