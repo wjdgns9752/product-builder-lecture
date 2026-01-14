@@ -11,7 +11,7 @@
     
     <title>스마트 환경 소음 모니터 (층간/항공/도로/철도) | 실시간 dB 측정</title>
     
-    <link rel="stylesheet" href="style.css?v=5">
+    <link rel="stylesheet" href="style.css?v=6">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔊</text></svg>">
     
     <!-- Google AdSense -->
@@ -31,7 +31,40 @@
             <h1>실시간 환경 소음 모니터링</h1>
             <p class="subtitle">마이크를 통해 층간소음, 항공기, 도로, 철도 소음을 측정하고 기준을 확인하세요.</p>
             
-            <canvas id="visualizer" width="600" height="150"></canvas>
+            <canvas id="visualizer" width="600" height="100"></canvas>
+            
+            <!-- Noise Classification UI -->
+            <div class="classifier-container">
+                <h3>🔍 소음원 분석 (실시간)</h3>
+                <div class="class-grid">
+                    <div class="class-card" id="type-floor">
+                        <div class="icon">👣</div>
+                        <div class="label">층간소음</div>
+                        <div class="sub">저주파/충격</div>
+                    </div>
+                    <div class="class-card" id="type-home">
+                        <div class="icon">🏠</div>
+                        <div class="label">생활소음</div>
+                        <div class="sub">대화/TV</div>
+                    </div>
+                    <div class="class-card" id="type-road">
+                        <div class="icon">🚗</div>
+                        <div class="label">도로교통</div>
+                        <div class="sub">지속음</div>
+                    </div>
+                    <div class="class-card" id="type-train">
+                        <div class="icon">🚆</div>
+                        <div class="label">철도/지하철</div>
+                        <div class="sub">진동/마찰</div>
+                    </div>
+                    <div class="class-card" id="type-air">
+                        <div class="icon">✈️</div>
+                        <div class="label">항공기</div>
+                        <div class="sub">상공 통과</div>
+                    </div>
+                </div>
+                <p class="algo-note">* 주파수 대역 분석 기반 추정값입니다. (AI 정밀 분석 아님)</p>
+            </div>
             
             <div class="status-panel">
                 <h2 id="status-text">상태: 대기 중</h2>
@@ -262,6 +295,6 @@
         </div>
     </div>
 
-    <script type="module" src="main.js?v=5"></script>
+    <script type="module" src="main.js?v=6"></script>
 </body>
 </html>
