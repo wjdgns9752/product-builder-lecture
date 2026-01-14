@@ -17,6 +17,7 @@ const db = getFirestore(app);
 
 // DOM Elements
 const initBtn = document.getElementById('init-btn');
+const recordBtn = document.getElementById('record-btn');
 const meterBar = document.getElementById('meter-bar');
 const bgMarker = document.getElementById('bg-marker');
 const currentVolSpan = document.getElementById('current-vol');
@@ -168,6 +169,7 @@ async function startAudio() {
     microphone.connect(analyser);
 
     initBtn.style.display = 'none';
+    recordBtn.classList.remove('hidden'); // Show record button
     isMonitoring = true;
     statusText.textContent = "상태: 모니터링 중...";
     
@@ -537,6 +539,29 @@ saveCalibBtn.addEventListener('click', () => {
     localStorage.setItem('dbOffset', dbOffset);
     alert(`보정 완료!`);
     stopPinkNoise(); calibModal.classList.add('hidden');
+});
+
+// Manual Record Button Logic
+recordBtn.addEventListener('click', async () => {
+    if (!isRecording) {
+        // Start Recording
+        startRecording();
+        recordBtn.textContent = "⏹️ 녹음 중지";
+        recordBtn.classList.add('recording');
+        statusText.textContent = "상태: 수동 녹음 중...";
+    } else {
+        // Stop Recording
+        recordBtn.textContent = "⏳ 처리 중...";
+        recordedBlob = await stopRecording(true);
+        
+        // Reset UI
+        recordBtn.textContent = "🔴 녹음 시작";
+        recordBtn.classList.remove('recording');
+        statusText.textContent = "상태: 모니터링 중...";
+        
+        // Show Modal
+        showEvaluationModal();
+    }
 });
 
 rateBtns.forEach(btn => {
