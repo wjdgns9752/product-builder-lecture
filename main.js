@@ -98,6 +98,9 @@ let tempCtx = tempCanvas.getContext('2d');
 tempCanvas.width = canvas.width;
 tempCanvas.height = canvas.height;
 
+// Permission Modal
+const permissionModal = document.getElementById('permission-modal');
+
 // --- Theme Logic ---
 const currentTheme = localStorage.getItem('theme');
 if (currentTheme === 'dark') {
@@ -114,12 +117,16 @@ thresholdSlider.addEventListener('input', (e) => {
   thresholdVal.textContent = e.target.value;
 });
 
-const permissionModal = document.getElementById('permission-modal');
-
-// --- Audio Functions (Moved Up for Safety) ---
+// --- Audio Functions ---
 async function startAudio() {
+  if (isMonitoring) {
+      if (audioContext && audioContext.state === 'suspended') {
+          await audioContext.resume();
+      }
+      return true;
+  }
+
   try {
-    // Reset context if it's in a bad state from previous failed attempts
     if (audioContext && audioContext.state === 'closed') {
         audioContext = null;
     }
@@ -131,7 +138,6 @@ async function startAudio() {
       await audioContext.resume();
     }
 
-    // Critical: Disable built-in audio processing for accurate loopback measurement
     const constraints = {
         audio: {
             echoCancellation: false,
@@ -154,26 +160,22 @@ async function startAudio() {
     isMonitoring = true;
     statusText.textContent = "상태: 모니터링 중...";
     
-    // Start Analysis Loop
     analyze();
     drawSpectrogram();
     
-    return true; // Success
+    return true; 
   } catch (err) {
     console.error('Error accessing microphone:', err);
-    
-    // Handle Permission Denied specifically
     if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
         if(permissionModal) {
             permissionModal.classList.remove('hidden');
             permissionModal.style.display = 'flex';
         } else {
-            alert("마이크 권한이 차단되었습니다. 브라우저 설정에서 권한을 허용해주세요.");
+            alert("마이크 권한이 차단되었습니다. 설정을 확인해주세요.");
         }
         return false;
     }
-
-    // Fallback: Try simple constraints if advanced ones fail (and it wasn't a permission issue)
+    // Simple fallback
     try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         microphone = audioContext.createMediaStreamSource(stream);
@@ -183,21 +185,10 @@ async function startAudio() {
         microphone.connect(analyser);
         initBtn.style.display = 'none';
         isMonitoring = true;
-        statusText.textContent = "상태: 모니터링 중... (기본 모드)";
         analyze();
         drawSpectrogram();
         return true;
     } catch (fallbackErr) {
-        console.error('Fallback failed:', fallbackErr);
-        
-        if (fallbackErr.name === 'NotAllowedError' || fallbackErr.name === 'PermissionDeniedError') {
-             if(permissionModal) {
-                permissionModal.classList.remove('hidden');
-                permissionModal.style.display = 'flex';
-            }
-        } else {
-            alert('마이크 연결에 실패했습니다. 다른 브라우저를 사용해보세요.');
-        }
         return false;
     }
   }
@@ -207,67 +198,58 @@ async function startAudio() {
 function getDeviceReferenceSPL() {
     const ua = navigator.userAgent;
     let model = "Unknown Device";
-    let refSPL = 75; // Default Baseline
+    let refSPL = 75; 
 
-    // 1. Detect Model
     if (/iPhone|iPad|iPod/.test(ua)) {
         model = "Apple iPhone/iPad";
-        refSPL = 79; // Newer iPhones have loud stereo speakers
+        refSPL = 79; 
     } else {
-        // Try to find Android Model (e.g., "SM-S908N")
         const match = ua.match(/;\s([^;]+)\sBuild/);
         if (match) {
             model = match[1].trim();
-            
-            // 2. Apply Heuristics for Android
             if (model.includes("SM-S") || model.includes("SM-G") || model.includes("SM-N") || model.includes("SM-F")) {
-                // Samsung Flagship (S, Note, Fold/Flip)
                 refSPL = 78;
             } else if (model.includes("SM-A") || model.includes("SM-M")) {
-                // Samsung Mid-range
                 refSPL = 74;
             } else if (model.toLowerCase().includes("pixel")) {
-                // Google Pixel
                 refSPL = 77;
             }
         }
     }
-    
     return { model, refSPL };
 }
 
-// --- Auto Calibration Logic (Loopback) ---
+// --- Auto Calibration Logic ---
 if (autoCalibBtn) {
     autoCalibBtn.addEventListener('click', async () => {
-        console.log("Auto Calibration Started");
-        
-        // Ensure Audio Context is Ready
-        if (!audioContext || audioContext.state === 'suspended') {
-            const success = await startAudio();
-            if (!success) return;
-        }
+        // Reset Eval UI
+        isPausedForEval = false;
+        if (modal) modal.classList.add('hidden');
 
         // Set Flag
         isCalibrating = true;
+        statusText.textContent = "상태: 마이크 보정 중... (평가 중지)";
 
-        // Detect Device & Reference SPL
+        if (!audioContext || audioContext.state === 'suspended') {
+            const success = await startAudio();
+            if (!success) {
+                isCalibrating = false;
+                return;
+            }
+        }
+
         const { model, refSPL } = getDeviceReferenceSPL();
-        const referenceSPL = refSPL; // Use detected value
+        const referenceSPL = refSPL; 
 
-        // Update UI
         autoCalibBtn.disabled = true;
         autoCalibBtn.textContent = `⏳ 측정 중... (기기: ${model})`;
         
         try {
-            // 1. Start Noise
             if (!isPlayingNoise) playPinkNoise();
 
-            // 2. Wait for stabilization (1s)
             setTimeout(() => {
-                // 3. Measure for 3 seconds
                 let sumDb = 0;
                 let samples = 0;
-                
                 const measurementInterval = setInterval(() => {
                     const rawDb = parseFloat(currentRawDbSpan.textContent);
                     if (!isNaN(rawDb) && rawDb > -100) {
@@ -282,25 +264,22 @@ if (autoCalibBtn) {
                     
                     if (samples > 5) { 
                         const avgRawDb = sumDb / samples;
-                        const newOffset = referenceSPL - avgRawDb;
-                        
-                        dbOffset = newOffset;
+                        dbOffset = referenceSPL - avgRawDb;
                         localStorage.setItem('dbOffset', dbOffset);
-                        
-                        alert(`[정밀 자동 보정 완료]\n\n📱 감지된 기기: ${model}\n🔊 기준 출력 적용: ${referenceSPL} dB\n\n🎤 평균 입력: ${avgRawDb.toFixed(1)} dBFS\n✅ 최종 보정값: ${newOffset.toFixed(1)} dB`);
+                        alert(`[자동 보정 완료]\n보정값: ${dbOffset.toFixed(1)} dB`);
                         calibModal.classList.add('hidden');
-                    } else {
-                        alert("측정된 소리가 너무 작습니다. 볼륨을 최대로 했는지 확인해주세요.");
                     }
                     
-                    autoCalibBtn.disabled = false;
-                    autoCalibBtn.textContent = "🚀 자동 보정 시작";
-                    isCalibrating = false; 
+                    // Cooldown to prevent tail noise alarm
+                    setTimeout(() => {
+                        autoCalibBtn.disabled = false;
+                        autoCalibBtn.textContent = "🚀 자동 보정 시작";
+                        isCalibrating = false;
+                        statusText.textContent = "상태: 감지 중...";
+                    }, 1500);
                 }, 3000); 
-                
             }, 1000); 
         } catch (e) {
-            console.error(e);
             autoCalibBtn.disabled = false;
             isCalibrating = false;
             stopPinkNoise();
@@ -308,23 +287,20 @@ if (autoCalibBtn) {
     });
 }
 
-// --- Audio Initialization Button ---
+// --- Audio Init Button ---
 initBtn.addEventListener('click', async () => {
-  if (isMonitoring) return;
   await startAudio();
 });
 
 // --- Analysis Loop ---
 function analyze() {
   requestAnimationFrame(analyze);
-
   if (!isMonitoring || isPausedForEval) return;
 
   const bufferLength = analyser.frequencyBinCount;
   const dataArray = new Uint8Array(bufferLength);
   analyser.getByteFrequencyData(dataArray);
 
-  // 1. Calculate RMS & dB
   let sum = 0;
   for(let i = 0; i < bufferLength; i++) {
     const x = dataArray[i] / 255; 
@@ -336,58 +312,34 @@ function analyze() {
   if (calibratedDb < 0) calibratedDb = 0;
   currentVolumeValue = calibratedDb;
   
-  // Calibration Modal Live Update
   if (!calibModal.classList.contains('hidden')) {
       currentRawDbSpan.textContent = rawDb.toFixed(1);
   }
 
-  // 2. Simple Frequency Classifier (Heuristic)
-  // Freq Resolution = SampleRate(48000) / FFT(2048) ~= 23.4Hz per bin
-  // Low: 0-200Hz (Bins 0-9) -> Floor / Train
-  // Mid-Low: 200-1000Hz (Bins 9-42) -> Road / Air
-  // Mid-High: 1000-4000Hz (Bins 42-170) -> Home (Voice)
-  
-  if (calibratedDb > 40 && !isCalibrating) { // Only classify if audible
+  // Classifier
+  if (calibratedDb > 40 && !isCalibrating) { 
       let lowEnergy = 0, midLowEnergy = 0, midHighEnergy = 0;
-      
       for(let i=0; i<10; i++) lowEnergy += dataArray[i];
       for(let i=10; i<42; i++) midLowEnergy += dataArray[i];
       for(let i=42; i<170; i++) midHighEnergy += dataArray[i];
       
-      // Normalize by bin count
-      lowEnergy /= 10;
-      midLowEnergy /= 32;
-      midHighEnergy /= 128;
-
-      // Find dominant band
+      lowEnergy /= 10; midLowEnergy /= 32; midHighEnergy /= 128;
       const maxEnergy = Math.max(lowEnergy, midLowEnergy, midHighEnergy);
       
-      // Reset classes
       Object.values(classCards).forEach(c => c.classList.remove('active'));
-
-      if (maxEnergy === lowEnergy) {
-          // Low Freq -> Floor or Train (Distinguish by "Rumble" vs "Impact" is hard without history)
-          // Just highlight Floor as primary default for low freq impact
-          classCards.floor.classList.add('active'); 
-          // If very strong low continuous -> Train (Simplified)
-      } else if (maxEnergy === midLowEnergy) {
-           // Road noise or Aircraft
-           if (midLowEnergy > 150) classCards.air.classList.add('active'); // Louder mid-low
+      if (maxEnergy === lowEnergy) classCards.floor.classList.add('active'); 
+      else if (maxEnergy === midLowEnergy) {
+           if (midLowEnergy > 150) classCards.air.classList.add('active'); 
            else classCards.road.classList.add('active');
-      } else {
-           // Higher freq -> Home (Voice, TV)
-           classCards.home.classList.add('active');
-      }
+      } else classCards.home.classList.add('active');
   } else {
       Object.values(classCards).forEach(c => c.classList.remove('active'));
   }
 
-  // 3. Adaptive Background
+  // Background
   if (calibratedDb < backgroundLevel) {
       backgroundLevel = Math.max(10, backgroundLevel * (1 - decayRate) + calibratedDb * decayRate);
-  } else {
-      backgroundLevel = backgroundLevel * (1 - adaptationRate) + calibratedDb * adaptationRate;
-  }
+  } else backgroundLevel = backgroundLevel * (1 - adaptationRate) + calibratedDb * adaptationRate;
   
   updateUI(calibratedDb, backgroundLevel);
   checkThreshold(calibratedDb, backgroundLevel);
@@ -396,50 +348,37 @@ function analyze() {
 function updateUI(current, bg) {
   meterBar.style.width = `${Math.min(100, Math.max(0, current))}%`;
   bgMarker.style.left = `${Math.min(100, Math.max(0, bg))}%`;
-  
   currentVolSpan.textContent = Math.round(current);
   bgVolSpan.textContent = Math.round(bg);
-  
-  if (current > 75) { 
-     meterBar.style.backgroundColor = '#f44336'; 
-  } else if (current > 50) { 
-     meterBar.style.backgroundColor = '#ffeb3b'; 
-  } else { 
-     meterBar.style.backgroundColor = '#4caf50'; 
-  }
+  if (current > 75) meterBar.style.backgroundColor = '#f44336'; 
+  else if (current > 50) meterBar.style.backgroundColor = '#ffeb3b'; 
+  else meterBar.style.backgroundColor = '#4caf50'; 
 }
 
 function checkThreshold(current, bg) {
-  if (isCalibrating) return; // Prevent alarm during calibration
-
+  if (isCalibrating) {
+      statusText.textContent = "상태: 마이크 보정 중... (평가 일시중지)";
+      durationBar.style.width = '0%';
+      return; 
+  }
   if (Date.now() - lastEvalTime < GRACE_PERIOD_MS) {
       durationBar.style.width = '0%';
       return;
   }
-
   if (current < 30) { 
       noiseStartTime = 0;
       durationBar.style.width = '0%';
       statusText.textContent = "상태: 감지 중 (조용함)";
       return;
   }
-
-  const percentIncrease = parseInt(thresholdSlider.value);
-  const triggerGap = 25 - (percentIncrease / 100 * 20); 
+  const triggerGap = 25 - (parseInt(thresholdSlider.value) / 100 * 20); 
   const triggerLevel = bg + triggerGap;
-  
   if (current > triggerLevel) {
       if (noiseStartTime === 0) noiseStartTime = Date.now();
-      
       const duration = Date.now() - noiseStartTime;
-      const progress = Math.min(100, (duration / TRIGGER_DURATION_MS) * 100);
-      durationBar.style.width = `${progress}%`;
-      
+      durationBar.style.width = `${Math.min(100, (duration / TRIGGER_DURATION_MS) * 100)}%`;
       statusText.textContent = `상태: 소음 감지! 기준+${Math.round(triggerGap)}dB (${(duration/1000).toFixed(1)}s)`;
-
-      if (duration > TRIGGER_DURATION_MS) {
-          triggerAlarm();
-      }
+      if (duration > TRIGGER_DURATION_MS) triggerAlarm();
   } else {
       noiseStartTime = 0;
       durationBar.style.width = '0%';
@@ -452,103 +391,10 @@ function triggerAlarm() {
   isPausedForEval = true; 
   noiseStartTime = 0;
   durationBar.style.width = '100%';
-  
   statusText.textContent = "상태: 지속적 소음 발생! 평가 필요";
   if (audioAlarmCheckbox.checked) playBeep();
   showEvaluationModal();
 }
-
-function playBeep() {
-    if (!audioContext) return;
-    const osc = audioContext.createOscillator();
-    const gain = audioContext.createGain();
-    osc.connect(gain);
-    gain.connect(audioContext.destination);
-    osc.type = 'square';
-    osc.frequency.value = 880; 
-    gain.gain.value = 0.1;
-    osc.start();
-    osc.stop(audioContext.currentTime + 0.1);
-}
-
-// --- Calibration Logic ---
-
-calibBtn.addEventListener('click', async () => {
-    if (!audioContext) await startAudio();
-    calibModal.classList.remove('hidden');
-});
-
-cancelCalibBtn.addEventListener('click', () => {
-    stopPinkNoise();
-    calibModal.classList.add('hidden');
-});
-
-playNoiseBtn.addEventListener('click', () => {
-    if (isPlayingNoise) stopPinkNoise();
-    else playPinkNoise();
-});
-
-saveCalibBtn.addEventListener('click', () => {
-    const realDb = parseFloat(realDbInput.value);
-    const rawDbText = currentRawDbSpan.textContent;
-    
-    if (isNaN(realDb) || rawDbText === '...') {
-        alert("실제 dB 값을 입력하고 마이크 입력을 확인해주세요.");
-        return;
-    }
-
-    const currentRaw = parseFloat(rawDbText);
-    dbOffset = realDb - currentRaw;
-    
-    localStorage.setItem('dbOffset', dbOffset);
-    alert(`보정 완료! 보정값(${dbOffset.toFixed(1)}dB)이 저장되었습니다.`);
-    stopPinkNoise();
-    calibModal.classList.add('hidden');
-});
-
-function playPinkNoise() {
-    if (!audioContext) return;
-    
-    // Pink Noise Generator
-    const bufferSize = 4096;
-    const pinkBuffer = audioContext.createBuffer(1, audioContext.sampleRate * 2, audioContext.sampleRate);
-    const data = pinkBuffer.getChannelData(0);
-    
-    let b0=0, b1=0, b2=0, b3=0, b4=0, b5=0, b6=0;
-    
-    for(let i=0; i<data.length; i++) {
-        const white = Math.random() * 2 - 1;
-        b0 = 0.99886 * b0 + white * 0.0555179;
-        b1 = 0.99332 * b1 + white * 0.0750759;
-        b2 = 0.96900 * b2 + white * 0.1538520;
-        b3 = 0.86650 * b3 + white * 0.3104856;
-        b4 = 0.55000 * b4 + white * 0.5329522;
-        b5 = -0.7616 * b5 - white * 0.0168980;
-        data[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362;
-        data[i] *= 0.11; 
-        b6 = white * 0.115926;
-    }
-
-    noiseNode = audioContext.createBufferSource();
-    noiseNode.buffer = pinkBuffer;
-    noiseNode.loop = true;
-    noiseNode.connect(audioContext.destination);
-    noiseNode.start();
-    
-    isPlayingNoise = true;
-    playNoiseBtn.textContent = "⏹️ 핑크 노이즈 중지";
-}
-
-function stopPinkNoise() {
-    if (noiseNode) {
-        noiseNode.stop();
-        noiseNode = null;
-    }
-    isPlayingNoise = false;
-    playNoiseBtn.textContent = "🔊 핑크 노이즈 재생";
-}
-
-// --- Evaluation / Survey Logic ---
 
 function showEvaluationModal() {
   modal.classList.remove('hidden');
@@ -563,16 +409,44 @@ function resetRatingUI() {
   selectedRating = null;
   selectedValSpan.textContent = '-';
   submitEvalBtn.disabled = true;
-  
   rateBtns.forEach(btn => btn.classList.remove('selected'));
-  
   Object.values(chipGroups).forEach(group => {
       group.forEach(chip => chip.classList.remove('selected'));
   });
   surveyData = { activity: null, source: null };
 }
 
-// Handle Rating Click
+function playBeep() {
+    if (!audioContext) return;
+    const osc = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+    osc.connect(gain); gain.connect(audioContext.destination);
+    osc.type = 'square'; osc.frequency.value = 880; 
+    gain.gain.value = 0.1;
+    osc.start(); osc.stop(audioContext.currentTime + 0.1);
+}
+
+// Button Events
+calibBtn.addEventListener('click', async () => {
+    if (!audioContext) await startAudio();
+    calibModal.classList.remove('hidden');
+});
+cancelCalibBtn.addEventListener('click', () => {
+    stopPinkNoise(); calibModal.classList.add('hidden');
+});
+playNoiseBtn.addEventListener('click', () => {
+    if (isPlayingNoise) stopPinkNoise(); else playPinkNoise();
+});
+saveCalibBtn.addEventListener('click', () => {
+    const realDb = parseFloat(realDbInput.value);
+    const currentRaw = parseFloat(currentRawDbSpan.textContent);
+    if (isNaN(realDb) || isNaN(currentRaw)) return;
+    dbOffset = realDb - currentRaw;
+    localStorage.setItem('dbOffset', dbOffset);
+    alert(`보정 완료!`);
+    stopPinkNoise(); calibModal.classList.add('hidden');
+});
+
 rateBtns.forEach(btn => {
   btn.addEventListener('click', () => {
     rateBtns.forEach(b => b.classList.remove('selected'));
@@ -583,7 +457,6 @@ rateBtns.forEach(btn => {
   });
 });
 
-// Handle Chip Click
 Object.entries(chipGroups).forEach(([type, chips]) => {
     chips.forEach(chip => {
         chip.addEventListener('click', () => {
@@ -601,52 +474,38 @@ function checkSubmitReady() {
 
 submitEvalBtn.addEventListener('click', async () => {
   if (selectedRating === null) return;
-  
   try {
+    const profile = JSON.parse(localStorage.getItem('user_profile')) || {};
     const payload = {
       rating: parseInt(selectedRating, 10),
       noiseLevel: parseFloat(currentVolumeValue.toFixed(1)),
       backgroundLevel: Math.round(backgroundLevel),
-      context: {
-          activity: surveyData.activity || 'unknown',
-          source: surveyData.source || 'unknown'
-      },
-      userProfile: JSON.parse(localStorage.getItem('user_profile')) || {}, 
+      context: { activity: surveyData.activity || 'unknown', source: surveyData.source || 'unknown' },
+      userProfile: profile,
       userAgent: navigator.userAgent, 
       timestamp: serverTimestamp()
     };
-
     await addDoc(collection(db, "noise_evaluations"), payload);
-    console.log("Firebase storage successful", payload);
-  } catch (err) {
-    console.error('Firebase storage error:', err);
-  }
-  
+  } catch (err) { console.error(err); }
   hideEvaluationModal();
   lastEvalTime = Date.now();
   statusText.textContent = "상태: 안정화 중...";
   isPausedForEval = false; 
   meterBar.style.width = '0%';
   durationBar.style.width = '0%';
-  if (audioContext && audioContext.state === 'suspended') {
-      audioContext.resume();
-  }
+  if (audioContext && audioContext.state === 'suspended') await audioContext.resume();
 });
 
-// --- Visualizer ---
 function drawSpectrogram() {
   requestAnimationFrame(drawSpectrogram);
   if (!isMonitoring || isPausedForEval) return;
-
   const bufferLength = analyser.frequencyBinCount;
   const dataArray = new Uint8Array(bufferLength);
   analyser.getByteFrequencyData(dataArray);
-
   tempCtx.drawImage(canvas, 0, 0, canvas.width, canvas.height);
   const width = canvas.width;
   const height = canvas.height;
   canvasCtx.drawImage(canvas, -1, 0);
-
   for (let i = 0; i < bufferLength; i++) {
     const value = dataArray[i];
     const percent = value / 255;
@@ -656,4 +515,28 @@ function drawSpectrogram() {
     const h = Math.ceil(height / bufferLength); 
     canvasCtx.fillRect(width - 1, y - h, 1, h);
   }
+}
+
+function playPinkNoise() {
+    if (!audioContext) return;
+    const pinkBuffer = audioContext.createBuffer(1, audioContext.sampleRate * 2, audioContext.sampleRate);
+    const data = pinkBuffer.getChannelData(0);
+    let b0=0, b1=0, b2=0, b3=0, b4=0, b5=0, b6=0;
+    for(let i=0; i<data.length; i++) {
+        const white = Math.random() * 2 - 1;
+        b0 = 0.99886 * b0 + white * 0.0555179; b1 = 0.99332 * b1 + white * 0.0750759;
+        b2 = 0.96900 * b2 + white * 0.1538520; b3 = 0.86650 * b3 + white * 0.3104856;
+        b4 = 0.55000 * b4 + white * 0.5329522; b5 = -0.7616 * b5 - white * 0.0168980;
+        data[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.11;
+        b6 = white * 0.115926;
+    }
+    noiseNode = audioContext.createBufferSource();
+    noiseNode.buffer = pinkBuffer; noiseNode.loop = true;
+    noiseNode.connect(audioContext.destination); noiseNode.start();
+    isPlayingNoise = true; playNoiseBtn.textContent = "⏹️ 핑크 노이즈 중지";
+}
+
+function stopPinkNoise() {
+    if (noiseNode) { noiseNode.stop(); noiseNode = null; }
+    isPlayingNoise = false; playNoiseBtn.textContent = "🔊 핑크 노이즈 재생";
 }
