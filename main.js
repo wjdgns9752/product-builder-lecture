@@ -435,7 +435,11 @@ function checkThreshold(current, bg) {
   }
   if (current < 30) { 
       noiseStartTime = 0;
-      cancelRecording(); // Stop if too quiet
+      if (isRecording && !recordBtn.classList.contains('manual-lock')) { 
+          cancelRecording();
+          recordBtn.textContent = "🔴 녹음 시작";
+          recordBtn.classList.remove('recording');
+      }
       durationBar.style.width = '0%';
       statusText.textContent = "상태: 감지 중 (조용함)";
       return;
@@ -445,7 +449,9 @@ function checkThreshold(current, bg) {
   if (current > triggerLevel) {
       if (noiseStartTime === 0) {
           noiseStartTime = Date.now();
-          startRecording(); // Start recording on first breach
+          startRecording();
+          recordBtn.textContent = "⏹️ 녹음 중지/완료";
+          recordBtn.classList.add('recording');
       }
       const duration = Date.now() - noiseStartTime;
       durationBar.style.width = `${Math.min(100, (duration / TRIGGER_DURATION_MS) * 100)}%`;
@@ -453,7 +459,11 @@ function checkThreshold(current, bg) {
       if (duration > TRIGGER_DURATION_MS) triggerAlarm();
   } else {
       noiseStartTime = 0;
-      cancelRecording(); // Reset if it dips below trigger
+      if (isRecording && !recordBtn.classList.contains('manual-lock')) {
+          cancelRecording();
+          recordBtn.textContent = "🔴 녹음 시작";
+          recordBtn.classList.remove('recording');
+      }
       durationBar.style.width = '0%';
       statusText.textContent = "상태: 감지 중...";
   }
@@ -468,6 +478,11 @@ async function triggerAlarm() {
   
   // Stop and save recording
   recordedBlob = await stopRecording(true);
+  
+  // Reset Button UI
+  recordBtn.textContent = "🔴 녹음 시작";
+  recordBtn.classList.remove('recording');
+  recordBtn.classList.remove('manual-lock');
 
   if (audioAlarmCheckbox.checked) playBeep();
   showEvaluationModal();
@@ -546,8 +561,9 @@ recordBtn.addEventListener('click', async () => {
     if (!isRecording) {
         // Start Recording
         startRecording();
-        recordBtn.textContent = "⏹️ 녹음 중지";
+        recordBtn.textContent = "⏹️ 녹음 중지/완료";
         recordBtn.classList.add('recording');
+        recordBtn.classList.add('manual-lock'); // Mark as manual so threshold doesn't cancel it
         statusText.textContent = "상태: 수동 녹음 중...";
     } else {
         // Stop Recording
@@ -557,6 +573,7 @@ recordBtn.addEventListener('click', async () => {
         // Reset UI
         recordBtn.textContent = "🔴 녹음 시작";
         recordBtn.classList.remove('recording');
+        recordBtn.classList.remove('manual-lock');
         statusText.textContent = "상태: 모니터링 중...";
         
         // Show Modal
