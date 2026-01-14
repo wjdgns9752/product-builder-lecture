@@ -55,9 +55,13 @@ if (userInfoForm) {
         };
         
         localStorage.setItem('user_profile', JSON.stringify(userProfile));
-        userInfoModal.style.display = 'none';
         
-        // Optional: Trigger Audio start or permission hint here if needed
+        // Hide modal
+        userInfoModal.style.display = 'none';
+        userInfoModal.classList.add('hidden'); // Ensure hidden class is added as backup
+        
+        // Optional: Prompt user to start monitoring
+        alert('정보가 저장되었습니다. \n[모니터링 시작] 버튼을 눌러 측정을 시작하세요.');
     });
 }
 
