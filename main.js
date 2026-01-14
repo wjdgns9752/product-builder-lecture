@@ -34,19 +34,23 @@ const body = document.body;
 // Calibration Elements
 // Onboarding & User Profile Logic
 const userInfoModal = document.getElementById('user-info-modal');
-const userInfoForm = document.getElementById('user-info-form');
+const btnSaveInfo = document.getElementById('btn-save-info'); // Changed to button ID
 
 let userProfile = JSON.parse(localStorage.getItem('user_profile')) || null;
 
 // Show Onboarding if no profile exists
-if (!userProfile) {
-    if(userInfoModal) userInfoModal.style.display = 'flex'; // Use flex to center
+if (!userProfile && userInfoModal) {
+    userInfoModal.style.display = 'flex';
 }
 
-if (userInfoForm) {
-    userInfoForm.addEventListener('submit', (e) => {
+// Handle Button Click directly
+if (btnSaveInfo) {
+    btnSaveInfo.addEventListener('click', (e) => {
+        // Prevent default just in case
         e.preventDefault();
         
+        console.log("Saving user info...");
+
         userProfile = {
             housingType: document.getElementById('housing-type').value,
             floorLevel: document.getElementById('floor-level').value,
@@ -56,12 +60,13 @@ if (userInfoForm) {
         
         localStorage.setItem('user_profile', JSON.stringify(userProfile));
         
-        // Hide modal
-        userInfoModal.style.display = 'none';
-        userInfoModal.classList.add('hidden'); // Ensure hidden class is added as backup
+        // Force Hide Modal
+        if (userInfoModal) {
+            userInfoModal.style.display = 'none';
+            userInfoModal.classList.add('hidden'); 
+        }
         
-        // Optional: Prompt user to start monitoring
-        alert('정보가 저장되었습니다. \n[모니터링 시작] 버튼을 눌러 측정을 시작하세요.');
+        alert('설정이 완료되었습니다.\n이제 [모니터링 시작] 버튼을 눌러주세요.');
     });
 }
 
