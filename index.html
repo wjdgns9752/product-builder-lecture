@@ -340,6 +340,52 @@
         </div>
     </div>
 
-    <script type="module" src="main.js?v=11"></script>
+    <script>
+        // Global Onboarding Handler (Inline for safety)
+        function saveUserInfo() {
+            console.log("Saving user info (Inline)...");
+            
+            try {
+                const housingType = document.getElementById('housing-type').value;
+                const floorLevel = document.getElementById('floor-level').value;
+                const envType = document.getElementById('env-type').value;
+
+                const userProfile = {
+                    housingType: housingType,
+                    floorLevel: floorLevel,
+                    envType: envType,
+                    createdAt: new Date().toISOString()
+                };
+                
+                localStorage.setItem('user_profile', JSON.stringify(userProfile));
+            } catch (e) {
+                console.error("Storage error:", e);
+            }
+
+            // Force Hide Modal
+            const modal = document.getElementById('user-info-modal');
+            if (modal) {
+                modal.style.display = 'none';
+                modal.classList.add('hidden');
+            }
+            
+            alert('설정이 완료되었습니다.\n이제 [모니터링 시작] 버튼을 눌러주세요.');
+        }
+
+        // Check on load (Inline)
+        window.addEventListener('DOMContentLoaded', () => {
+            try {
+                const profile = localStorage.getItem('user_profile');
+                const modal = document.getElementById('user-info-modal');
+                if (!profile && modal) {
+                    modal.style.display = 'flex';
+                } else if (modal) {
+                    modal.style.display = 'none';
+                }
+            } catch(e) {}
+        });
+    </script>
+
+    <script type="module" src="main.js?v=12"></script>
 </body>
 </html>
