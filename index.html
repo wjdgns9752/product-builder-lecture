@@ -3,58 +3,138 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Noise Monitor</title>
+    <meta name="description" content="웹에서 바로 사용하는 실시간 층간소음 측정기 및 소음 모니터입니다. 데시벨(dB) 측정, 소음 기록 저장, 층간소음 법적 기준 정보를 제공합니다. 별도의 설치 없이 마이크로 간편하게 측정하세요.">
+    <meta name="keywords" content="층간소음 측정기, 데시벨 측정, 소음 측정 사이트, dB 측정, 소음 모니터, 층간소음 기준, 소음 기록">
+    <meta property="og:title" content="스마트 층간소음 모니터 - 실시간 데시벨 측정">
+    <meta property="og:description" content="설치 없는 무료 소음 측정기. 층간소음 기록 및 분석 기능을 제공합니다.">
+    <meta property="og:type" content="website">
+    
+    <title>스마트 층간소음 모니터 | 실시간 dB 측정 및 분석</title>
+    
     <link rel="stylesheet" href="style.css">
-    <link rel="icon" href="data:,">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔊</text></svg>">
+    
+    <!-- Google AdSense -->
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4494575673591119"
      crossorigin="anonymous"></script>
 </head>
 <body>
-    <div class="container">
-        <h1>소음 모니터링</h1>
-        
-        <canvas id="visualizer" width="600" height="150"></canvas>
-        
-        <div class="status-panel">
-            <h2 id="status-text">상태: 대기 중</h2>
-            
-            <div class="info-text">
-                <span>현재 소음: <span id="current-vol">0</span></span>
-                <span>배경 소음: <span id="bg-vol">0</span></span>
-            </div>
-            
-            <div class="meter-container">
-                <div id="bg-marker"></div>
-                <div id="meter-bar"></div>
-            </div>
+    <header>
+        <div class="header-container">
+            <div class="logo">🔊 Noise Monitor</div>
+        </div>
+    </header>
 
-            <div class="duration-container">
-                <div class="duration-label">지속 시간 감지</div>
-                <div class="duration-track">
-                    <div id="duration-bar"></div>
+    <main class="container">
+        <!-- Main Tool Section -->
+        <section class="tool-section">
+            <h1>실시간 소음 모니터링</h1>
+            <p class="subtitle">마이크를 통해 주변 소음을 측정하고 층간소음 기준을 확인하세요.</p>
+            
+            <canvas id="visualizer" width="600" height="150"></canvas>
+            
+            <div class="status-panel">
+                <h2 id="status-text">상태: 대기 중</h2>
+                
+                <div class="info-text">
+                    <span>현재 소음: <span id="current-vol">0</span> dB (상대값)</span>
+                    <span>배경 소음: <span id="bg-vol">0</span></span>
+                </div>
+                
+                <div class="meter-container">
+                    <div id="bg-marker"></div>
+                    <div id="meter-bar"></div>
+                </div>
+
+                <div class="duration-container">
+                    <div class="duration-label">지속 시간 감지</div>
+                    <div class="duration-track">
+                        <div id="duration-bar"></div>
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <div class="controls">
-            <button id="init-btn">모니터링 시작</button>
-        </div>
+            <div class="controls">
+                <button id="init-btn" class="primary-btn">모니터링 시작</button>
+            </div>
 
-        <div class="settings">
-            <h3>설정</h3>
-            <div class="desc">임계값 조절 (배경 소음 대비 % 증가량)</div>
-            <input type="range" id="threshold" min="10" max="100" value="50">
-            <div>설정값: <span id="threshold-val">50</span>%</div>
+            <div class="settings">
+                <h3>설정 (Sensitivity)</h3>
+                <div class="desc">알림 임계값 조절 (배경 소음 대비 민감도)</div>
+                <div class="slider-wrapper">
+                    <input type="range" id="threshold" min="10" max="100" value="50">
+                    <span id="threshold-val">50</span>%
+                </div>
+                
+                <div class="checkbox-wrapper">
+                    <label>
+                        <input type="checkbox" id="audio-alarm" checked>
+                        <span>알림음 켜기</span>
+                    </label>
+                </div>
+            </div>
+
+            <button id="theme-toggle" class="theme-btn">테마 변경</button>
+        </section>
+
+        <!-- Content Section for AdSense Quality -->
+        <article class="info-section">
+            <hr class="divider">
             
-            <br>
-            <label>
-                <input type="checkbox" id="audio-alarm" checked>
-                알림음 켜기
-            </label>
-        </div>
+            <section class="content-block">
+                <h2>층간소음과 데시벨(dB) 이해하기</h2>
+                <p>
+                    최근 공동주택 생활이 늘어나면서 층간소음 문제는 심각한 사회적 이슈가 되고 있습니다. 
+                    이 웹 도구는 사용자의 마이크를 활용하여 현재 환경의 소음 변화를 시각화하고, 
+                    갑작스러운 소음 발생을 감지하여 기록하는 데 도움을 줍니다.
+                </p>
+            </section>
 
-        <button id="theme-toggle" class="theme-btn">테마 변경</button>
-    </div>
+            <section class="content-block">
+                <h3>📢 소음의 크기별 예시 (dB)</h3>
+                <ul class="db-list">
+                    <li><strong>30dB:</strong> 속삭이는 소리, 심야의 교외</li>
+                    <li><strong>40dB:</strong> 조용한 도서관, 주간의 주택가</li>
+                    <li><strong>50dB:</strong> 조용한 사무실, 일반적인 빗소리</li>
+                    <li><strong>60dB:</strong> 일상적인 대화 소리, 백화점 내부</li>
+                    <li><strong>70dB:</strong> 시끄러운 사무실, 전화벨 소리</li>
+                    <li><strong>80dB:</strong> 지하철 차내 소음, 진공청소기</li>
+                    <li><strong>90dB 이상:</strong> 소음성 난청을 유발할 수 있는 수준</li>
+                </ul>
+                <p class="note">* 본 웹 앱의 측정값은 전문 장비가 아닌 기기 마이크를 사용하므로, 상대적인 참고용으로만 사용하시기 바랍니다.</p>
+            </section>
+
+            <section class="content-block">
+                <h3>⚖️ 층간소음의 법적 기준 (한국환경공단)</h3>
+                <p>
+                    공동주택 층간소음의 범위와 기준에 관한 규칙에 따르면, 
+                    <strong>직접충격 소음(발소리 등)</strong>의 경우 주간(06:00~22:00)에는 
+                    <strong>1분간 등가소음도 39dB</strong>, 야간(22:00~06:00)에는 <strong>34dB</strong>을 초과하면 안 됩니다.
+                </p>
+            </section>
+
+            <section class="content-block">
+                <h3>💡 효과적인 소음 모니터링 방법</h3>
+                <ol>
+                    <li>조용한 상태에서 '모니터링 시작'을 눌러 배경 소음을 학습시킵니다.</li>
+                    <li>소음이 발생했을 때 그래프가 급격히 상승하는지 확인합니다.</li>
+                    <li>지속적인 소음이 감지되면 자동으로 평가 창이 뜹니다.</li>
+                    <li>기록된 데이터를 통해 소음 빈도를 체크해보세요.</li>
+                </ol>
+            </section>
+        </article>
+    </main>
+
+    <footer>
+        <div class="footer-content">
+            <p>&copy; 2024 Noise Monitor. All rights reserved.</p>
+            <div class="footer-links">
+                <a href="#" onclick="alert('개인정보처리방침: 본 서비스는 사용자의 오디오 데이터를 서버로 전송하거나 저장하지 않습니다. 모든 오디오 처리는 사용자의 브라우저 내에서 실시간으로 이루어집니다. 평가 데이터(점수, 시간)만 통계 목적으로 익명 저장됩니다.')">개인정보처리방침</a>
+                <a href="#">이용약관</a>
+            </div>
+            <p class="disclaimer">본 서비스는 법적 효력이 있는 측정 도구가 아닙니다. 정확한 측정은 전문 소음계(Sound Level Meter)를 사용하시기 바랍니다.</p>
+        </div>
+    </footer>
 
     <!-- Evaluation Modal -->
     <div id="evaluation-modal" class="modal hidden">
