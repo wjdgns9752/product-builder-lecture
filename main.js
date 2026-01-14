@@ -489,7 +489,7 @@ function showEvaluationModal() {
       noisePlayer.src = currentAudioUrl;
       downloadLink.href = currentAudioUrl;
       const dateStr = new Date().toLocaleString().replace(/[:\/\s]/g, '-');
-      downloadLink.download = `noise-record-${dateStr}.webm`;
+      downloadLink.download = `[미분류]_${dateStr}.webm`;
   } else {
       audioPreviewContainer.style.display = 'none';
   }
@@ -580,17 +580,33 @@ Object.entries(chipGroups).forEach(([type, chips]) => {
             chips.forEach(c => c.classList.remove('selected'));
             chip.classList.add('selected');
             surveyData[type] = chip.dataset.val;
+            
+            // Update filename if source is selected
+            if (type === 'source' && downloadLink.href) {
+                const dateStr = new Date().toLocaleString().replace(/[:\/\s]/g, '-');
+                // Use the Korean label text if available, or the value
+                const labelText = chip.textContent.split('(')[0].trim(); // Get Korean part
+                downloadLink.download = `[${labelText}]_${dateStr}.webm`;
+            }
+            
             checkSubmitReady();
         });
     });
 });
 
 function checkSubmitReady() {
+    // Enable submit if rating is selected (source is optional but recommended for data)
     submitEvalBtn.disabled = (selectedRating === null);
 }
 
 submitEvalBtn.addEventListener('click', async () => {
   if (selectedRating === null) return;
+  
+  // Auto-download the labeled file for training data
+  if (downloadLink.href) {
+      downloadLink.click();
+  }
+
   try {
     const profile = JSON.parse(localStorage.getItem('user_profile')) || {};
     const payload = {
