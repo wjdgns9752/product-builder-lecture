@@ -295,6 +295,51 @@
         </div>
     </div>
 
-    <script type="module" src="main.js?v=7"></script>
+    <!-- Onboarding Modal (User Info) -->
+    <div id="user-info-modal" class="modal">
+        <div class="modal-content">
+            <h2>👋 환영합니다!</h2>
+            <p class="desc">정확한 소음 분석을 위해<br>기본 환경 정보를 입력해주세요.</p>
+            
+            <form id="user-info-form">
+                <div class="survey-section">
+                    <label>🏠 거주 형태</label>
+                    <select id="housing-type" class="full-select">
+                        <option value="apartment">아파트</option>
+                        <option value="officetel">오피스텔</option>
+                        <option value="villa">빌라/다세대</option>
+                        <option value="house">단독주택</option>
+                    </select>
+                </div>
+
+                <div class="survey-section">
+                    <label>🏢 거주 층수</label>
+                    <select id="floor-level" class="full-select">
+                        <option value="low">저층 (1~3층)</option>
+                        <option value="mid">중층 (4~10층)</option>
+                        <option value="high">고층 (11층 이상)</option>
+                        <option value="top">최상층 (탑층)</option>
+                        <option value="semi-basement">반지하/지하</option>
+                    </select>
+                </div>
+
+                <div class="survey-section">
+                    <label>🌳 주변 환경 (주 소음원)</label>
+                    <select id="env-type" class="full-select">
+                        <option value="residential">일반 주택가 (조용함)</option>
+                        <option value="roadside">도로변 (차량 소음)</option>
+                        <option value="railway">철도/지하철 인근</option>
+                        <option value="construction">공사장/상가 인근</option>
+                        <option value="airport">공항/항로 인근</option>
+                    </select>
+                </div>
+
+                <button type="submit" class="primary-btn" style="width:100%">입력 완료 및 시작</button>
+            </form>
+            <p class="algo-note" style="margin-top:15px">입력된 정보는 통계 분석용으로만 사용되며,<br>익명으로 안전하게 처리됩니다.</p>
+        </div>
+    </div>
+
+    <script type="module" src="main.js?v=8"></script>
 </body>
 </html>

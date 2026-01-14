@@ -32,20 +32,56 @@ const themeToggleBtn = document.getElementById('theme-toggle');
 const body = document.body;
 
 // Calibration Elements
-const realDbInput = document.getElementById('real-db-input');
-const autoCalibBtn = document.getElementById('auto-calib-btn');
-const currentRawDbSpan = document.getElementById('current-raw-db');
-const saveCalibBtn = document.getElementById('save-calib');
-const cancelCalibBtn = document.getElementById('cancel-calib');
-const calibBtn = document.getElementById('calibration-btn');
-const calibModal = document.getElementById('calibration-modal');
-const playNoiseBtn = document.getElementById('play-noise-btn');
+// Onboarding & User Profile Logic
+const userInfoModal = document.getElementById('user-info-modal');
+const userInfoForm = document.getElementById('user-info-form');
 
-// Evaluation Modal Elements
-const modal = document.getElementById('evaluation-modal');
-const rateBtns = document.querySelectorAll('.rate-btn');
-const submitEvalBtn = document.getElementById('submit-eval');
-const selectedValSpan = document.getElementById('selected-val');
+let userProfile = JSON.parse(localStorage.getItem('user_profile')) || null;
+
+// Show Onboarding if no profile exists
+if (!userProfile) {
+    if(userInfoModal) userInfoModal.style.display = 'flex'; // Use flex to center
+}
+
+if (userInfoForm) {
+    userInfoForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        
+        userProfile = {
+            housingType: document.getElementById('housing-type').value,
+            floorLevel: document.getElementById('floor-level').value,
+            envType: document.getElementById('env-type').value,
+            createdAt: new Date().toISOString()
+        };
+        
+        localStorage.setItem('user_profile', JSON.stringify(userProfile));
+        userInfoModal.style.display = 'none';
+        
+        // Optional: Trigger Audio start or permission hint here if needed
+    });
+}
+
+// ... (Rest of existing variables and logic)
+
+// ... (Inside submitEvalBtn listener)
+submitEvalBtn.addEventListener('click', async () => {
+  if (selectedRating === null) return;
+  
+  try {
+    const payload = {
+      rating: parseInt(selectedRating, 10),
+      noiseLevel: parseFloat(currentVolumeValue.toFixed(1)),
+      backgroundLevel: Math.round(backgroundLevel),
+      context: {
+          activity: surveyData.activity || 'unknown',
+          source: surveyData.source || 'unknown'
+      },
+      userProfile: userProfile || {}, // Include User Profile Data
+      userAgent: navigator.userAgent, 
+      timestamp: serverTimestamp()
+    };
+    // ...
+
 
 // Survey Elements
 const chipGroups = {
