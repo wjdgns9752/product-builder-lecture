@@ -1,3 +1,20 @@
+// Firebase Integration
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyB80YVLtFSBs2l3TiazSRj0xsgOBeUZG4I",
+  authDomain: "noise-monitoring-5764d.firebaseapp.com",
+  projectId: "noise-monitoring-5764d",
+  storageBucket: "noise-monitoring-5764d.firebasestorage.app",
+  messagingSenderId: "250708015230",
+  appId: "1:250708015230:web:676e299df9ef6ca00d002f",
+  measurementId: "G-1BCMY7SVDQ"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
 const initBtn = document.getElementById('init-btn');
 const meterBar = document.getElementById('meter-bar');
 const bgMarker = document.getElementById('bg-marker');
@@ -25,6 +42,7 @@ let microphone;
 let isMonitoring = false;
 let isPausedForEval = false; 
 let selectedRating = null;
+let currentVolumeValue = 0; // Current noise level to save
 
 // Duration Logic
 let noiseStartTime = 0;
@@ -114,6 +132,7 @@ function analyze() {
   
   // Normalize
   let currentVolume = Math.round((average / 255) * 100 * 3.0);
+  currentVolumeValue = currentVolume; // Store for saving
   
   // Adaptive Background Logic
   if (currentVolume < backgroundLevel) {
@@ -242,20 +261,23 @@ rateBtns.forEach(btn => {
   });
 });
 
-submitEvalBtn.addEventListener('click', () => {
+submitEvalBtn.addEventListener('click', async () => {
   if (selectedRating === null) return;
 
   console.log(`User evaluated noise event: ${selectedRating}/10`);
 
-  // Integration: Send data to the remote server
-  fetch('https://product-builder-lecture-35x.pages.dev/', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
+  // Save to Firebase
+  try {
+    await addDoc(collection(db, "noise_evaluations"), {
       rating: parseInt(selectedRating, 10),
-      timestamp: Date.now()
-    })
-  }).catch(err => console.error('Integration error:', err));
+      noiseLevel: currentVolumeValue,
+      backgroundLevel: Math.round(backgroundLevel),
+      timestamp: serverTimestamp()
+    });
+    console.log("Firebase storage successful");
+  } catch (err) {
+    console.error('Firebase storage error:', err);
+  }
   
   hideEvaluationModal();
   
