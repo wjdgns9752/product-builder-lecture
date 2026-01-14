@@ -94,18 +94,18 @@
 
             <div class="calib-step">
                 <span class="step-num">2</span>
-                <p>실제 소음계(혹은 다른 앱)로 측정한 현재 데시벨(dB)을 입력하세요.</p>
-                <div class="input-group">
-                    <input type="number" id="real-db-input" placeholder="예: 60" min="30" max="120">
-                    <span>dB</span>
-                </div>
+                <p><strong>자동 보정 (권장)</strong></p>
+                <p class="sub-desc">휴대폰 볼륨을 최대로 높인 후, 조용한 곳에 두고 아래 버튼을 누르세요. (약 5초 소요)</p>
+                <button id="auto-calib-btn" class="primary-btn" style="width:100%">🚀 자동 보정 시작</button>
                 
                 <div class="calib-divider">
-                    <span>또는</span>
+                    <span>또는 수동 입력</span>
                 </div>
 
-                <p class="sub-desc">스마트폰으로 녹음한 핑크 노이즈 파일을 업로드하여 자동 보정 (연구 기반 추정)</p>
-                <input type="file" id="calib-file-upload" accept="audio/*" class="file-input">
+                <div class="input-group" style="justify-content: center;">
+                    <input type="number" id="real-db-input" placeholder="예: 60" min="30" max="120">
+                    <span>dB (소음계 측정값)</span>
+                </div>
             </div>
 
             <div class="calib-step">
