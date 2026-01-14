@@ -32,73 +32,29 @@ const themeToggleBtn = document.getElementById('theme-toggle');
 const body = document.body;
 
 // Calibration Elements
-// Onboarding & User Profile Logic
-const userInfoModal = document.getElementById('user-info-modal');
+const realDbInput = document.getElementById('real-db-input');
+const autoCalibBtn = document.getElementById('auto-calib-btn');
+const currentRawDbSpan = document.getElementById('current-raw-db');
+const saveCalibBtn = document.getElementById('save-calib');
+const cancelCalibBtn = document.getElementById('cancel-calib');
+const calibBtn = document.getElementById('calibration-btn');
+const calibModal = document.getElementById('calibration-modal');
+const playNoiseBtn = document.getElementById('play-noise-btn');
 
-// Check profile on load
-try {
-    const profile = localStorage.getItem('user_profile');
-    if (!profile && userInfoModal) {
-        userInfoModal.style.display = 'flex';
-    }
-} catch (e) {
-    console.error("Storage access error:", e);
-    // If storage fails, we might still want to show/hide modal or just proceed
-}
+// Evaluation Modal Elements
+const modal = document.getElementById('evaluation-modal');
+const rateBtns = document.querySelectorAll('.rate-btn');
+const submitEvalBtn = document.getElementById('submit-eval');
+const selectedValSpan = document.getElementById('selected-val');
 
-// Global function for HTML onclick
-window.saveUserInfo = function() {
-    console.log("Saving user info...");
-    
-    try {
-        const housingType = document.getElementById('housing-type').value;
-        const floorLevel = document.getElementById('floor-level').value;
-        const envType = document.getElementById('env-type').value;
-
-        const userProfile = {
-            housingType: housingType,
-            floorLevel: floorLevel,
-            envType: envType,
-            createdAt: new Date().toISOString()
-        };
-        
-        localStorage.setItem('user_profile', JSON.stringify(userProfile));
-    } catch (e) {
-        console.error("Error saving profile:", e);
-        alert("브라우저 저장소 오류로 정보 저장은 건너뜁니다.");
-    }
-
-    // Force Close Modal
-    const modal = document.getElementById('user-info-modal');
-    if (modal) {
-        modal.style.display = 'none';
-        modal.classList.add('hidden');
-    }
-    
-    alert('설정이 완료되었습니다.\n이제 [모니터링 시작] 버튼을 눌러주세요.');
+// Classifier Elements
+const classCards = {
+    floor: document.getElementById('type-floor'),
+    home: document.getElementById('type-home'),
+    road: document.getElementById('type-road'),
+    train: document.getElementById('type-train'),
+    air: document.getElementById('type-air')
 };
-
-// ... (Rest of existing variables and logic)
-
-// ... (Inside submitEvalBtn listener)
-submitEvalBtn.addEventListener('click', async () => {
-  if (selectedRating === null) return;
-  
-  try {
-    const payload = {
-      rating: parseInt(selectedRating, 10),
-      noiseLevel: parseFloat(currentVolumeValue.toFixed(1)),
-      backgroundLevel: Math.round(backgroundLevel),
-      context: {
-          activity: surveyData.activity || 'unknown',
-          source: surveyData.source || 'unknown'
-      },
-      userProfile: userProfile || {}, // Include User Profile Data
-      userAgent: navigator.userAgent, 
-      timestamp: serverTimestamp()
-    };
-    // ...
-
 
 // Survey Elements
 const chipGroups = {
@@ -116,6 +72,7 @@ let analyser;
 let microphone;
 let isMonitoring = false;
 let isPausedForEval = false; 
+let isCalibrating = false; // Prevents alarm during calibration
 let selectedRating = null;
 let currentVolumeValue = 0; 
 
@@ -257,74 +214,76 @@ function getDeviceReferenceSPL() {
 }
 
 // --- Auto Calibration Logic (Loopback) ---
-autoCalibBtn.addEventListener('click', async () => {
-    console.log("Auto Calibration Started");
-    
-    // Ensure Audio Context is Ready
-    if (!audioContext || audioContext.state === 'suspended') {
-        const success = await startAudio();
-        if (!success) return;
-    }
+if (autoCalibBtn) {
+    autoCalibBtn.addEventListener('click', async () => {
+        console.log("Auto Calibration Started");
+        
+        // Ensure Audio Context is Ready
+        if (!audioContext || audioContext.state === 'suspended') {
+            const success = await startAudio();
+            if (!success) return;
+        }
 
-    // Set Flag
-    isCalibrating = true;
+        // Set Flag
+        isCalibrating = true;
 
-    // Detect Device & Reference SPL
-    const { model, refSPL } = getDeviceReferenceSPL();
-    const referenceSPL = refSPL; // Use detected value
+        // Detect Device & Reference SPL
+        const { model, refSPL } = getDeviceReferenceSPL();
+        const referenceSPL = refSPL; // Use detected value
 
-    // Update UI
-    autoCalibBtn.disabled = true;
-    autoCalibBtn.textContent = `⏳ 측정 중... (기기: ${model})`;
-    
-    try {
-        // 1. Start Noise
-        if (!isPlayingNoise) playPinkNoise();
+        // Update UI
+        autoCalibBtn.disabled = true;
+        autoCalibBtn.textContent = `⏳ 측정 중... (기기: ${model})`;
+        
+        try {
+            // 1. Start Noise
+            if (!isPlayingNoise) playPinkNoise();
 
-        // 2. Wait for stabilization (1s)
-        setTimeout(() => {
-            // 3. Measure for 3 seconds
-            let sumDb = 0;
-            let samples = 0;
-            
-            const measurementInterval = setInterval(() => {
-                const rawDb = parseFloat(currentRawDbSpan.textContent);
-                if (!isNaN(rawDb) && rawDb > -100) {
-                    sumDb += rawDb;
-                    samples++;
-                }
-            }, 100);
-
+            // 2. Wait for stabilization (1s)
             setTimeout(() => {
-                clearInterval(measurementInterval);
-                stopPinkNoise();
+                // 3. Measure for 3 seconds
+                let sumDb = 0;
+                let samples = 0;
                 
-                if (samples > 5) { 
-                    const avgRawDb = sumDb / samples;
-                    const newOffset = referenceSPL - avgRawDb;
+                const measurementInterval = setInterval(() => {
+                    const rawDb = parseFloat(currentRawDbSpan.textContent);
+                    if (!isNaN(rawDb) && rawDb > -100) {
+                        sumDb += rawDb;
+                        samples++;
+                    }
+                }, 100);
+
+                setTimeout(() => {
+                    clearInterval(measurementInterval);
+                    stopPinkNoise();
                     
-                    dbOffset = newOffset;
-                    localStorage.setItem('dbOffset', dbOffset);
+                    if (samples > 5) { 
+                        const avgRawDb = sumDb / samples;
+                        const newOffset = referenceSPL - avgRawDb;
+                        
+                        dbOffset = newOffset;
+                        localStorage.setItem('dbOffset', dbOffset);
+                        
+                        alert(`[정밀 자동 보정 완료]\n\n📱 감지된 기기: ${model}\n🔊 기준 출력 적용: ${referenceSPL} dB\n\n🎤 평균 입력: ${avgRawDb.toFixed(1)} dBFS\n✅ 최종 보정값: ${newOffset.toFixed(1)} dB`);
+                        calibModal.classList.add('hidden');
+                    } else {
+                        alert("측정된 소리가 너무 작습니다. 볼륨을 최대로 했는지 확인해주세요.");
+                    }
                     
-                    alert(`[정밀 자동 보정 완료]\n\n📱 감지된 기기: ${model}\n🔊 기준 출력 적용: ${referenceSPL} dB\n\n🎤 평균 입력: ${avgRawDb.toFixed(1)} dBFS\n✅ 최종 보정값: ${newOffset.toFixed(1)} dB`);
-                    calibModal.classList.add('hidden');
-                } else {
-                    alert("측정된 소리가 너무 작습니다. 볼륨을 최대로 했는지 확인해주세요.");
-                }
+                    autoCalibBtn.disabled = false;
+                    autoCalibBtn.textContent = "🚀 자동 보정 시작";
+                    isCalibrating = false; 
+                }, 3000); 
                 
-                autoCalibBtn.disabled = false;
-                autoCalibBtn.textContent = "🚀 자동 보정 시작";
-                isCalibrating = false; 
-            }, 3000); 
-            
-        }, 1000); 
-    } catch (e) {
-        console.error(e);
-        autoCalibBtn.disabled = false;
-        isCalibrating = false;
-        stopPinkNoise();
-    }
-});
+            }, 1000); 
+        } catch (e) {
+            console.error(e);
+            autoCalibBtn.disabled = false;
+            isCalibrating = false;
+            stopPinkNoise();
+        }
+    });
+}
 
 // --- Audio Initialization Button ---
 initBtn.addEventListener('click', async () => {
@@ -342,20 +301,16 @@ function analyze() {
   const dataArray = new Uint8Array(bufferLength);
   analyser.getByteFrequencyData(dataArray);
 
-  // Calculate RMS
+  // 1. Calculate RMS & dB
   let sum = 0;
   for(let i = 0; i < bufferLength; i++) {
     const x = dataArray[i] / 255; 
     sum += x * x;
   }
   const rms = Math.sqrt(sum / bufferLength);
-  
-  // Convert RMS to Decibels
   let rawDb = 20 * Math.log10(rms + 0.00001); 
   let calibratedDb = rawDb + dbOffset;
-  
   if (calibratedDb < 0) calibratedDb = 0;
-  
   currentVolumeValue = calibratedDb;
   
   // Calibration Modal Live Update
@@ -363,7 +318,48 @@ function analyze() {
       currentRawDbSpan.textContent = rawDb.toFixed(1);
   }
 
-  // Adaptive Background Logic
+  // 2. Simple Frequency Classifier (Heuristic)
+  // Freq Resolution = SampleRate(48000) / FFT(2048) ~= 23.4Hz per bin
+  // Low: 0-200Hz (Bins 0-9) -> Floor / Train
+  // Mid-Low: 200-1000Hz (Bins 9-42) -> Road / Air
+  // Mid-High: 1000-4000Hz (Bins 42-170) -> Home (Voice)
+  
+  if (calibratedDb > 40 && !isCalibrating) { // Only classify if audible
+      let lowEnergy = 0, midLowEnergy = 0, midHighEnergy = 0;
+      
+      for(let i=0; i<10; i++) lowEnergy += dataArray[i];
+      for(let i=10; i<42; i++) midLowEnergy += dataArray[i];
+      for(let i=42; i<170; i++) midHighEnergy += dataArray[i];
+      
+      // Normalize by bin count
+      lowEnergy /= 10;
+      midLowEnergy /= 32;
+      midHighEnergy /= 128;
+
+      // Find dominant band
+      const maxEnergy = Math.max(lowEnergy, midLowEnergy, midHighEnergy);
+      
+      // Reset classes
+      Object.values(classCards).forEach(c => c.classList.remove('active'));
+
+      if (maxEnergy === lowEnergy) {
+          // Low Freq -> Floor or Train (Distinguish by "Rumble" vs "Impact" is hard without history)
+          // Just highlight Floor as primary default for low freq impact
+          classCards.floor.classList.add('active'); 
+          // If very strong low continuous -> Train (Simplified)
+      } else if (maxEnergy === midLowEnergy) {
+           // Road noise or Aircraft
+           if (midLowEnergy > 150) classCards.air.classList.add('active'); // Louder mid-low
+           else classCards.road.classList.add('active');
+      } else {
+           // Higher freq -> Home (Voice, TV)
+           classCards.home.classList.add('active');
+      }
+  } else {
+      Object.values(classCards).forEach(c => c.classList.remove('active'));
+  }
+
+  // 3. Adaptive Background
   if (calibratedDb < backgroundLevel) {
       backgroundLevel = Math.max(10, backgroundLevel * (1 - decayRate) + calibratedDb * decayRate);
   } else {
@@ -391,6 +387,8 @@ function updateUI(current, bg) {
 }
 
 function checkThreshold(current, bg) {
+  if (isCalibrating) return; // Prevent alarm during calibration
+
   if (Date.now() - lastEvalTime < GRACE_PERIOD_MS) {
       durationBar.style.width = '0%';
       return;
@@ -590,6 +588,7 @@ submitEvalBtn.addEventListener('click', async () => {
           activity: surveyData.activity || 'unknown',
           source: surveyData.source || 'unknown'
       },
+      userProfile: JSON.parse(localStorage.getItem('user_profile')) || {}, 
       userAgent: navigator.userAgent, 
       timestamp: serverTimestamp()
     };
