@@ -114,9 +114,16 @@ thresholdSlider.addEventListener('input', (e) => {
   thresholdVal.textContent = e.target.value;
 });
 
+const permissionModal = document.getElementById('permission-modal');
+
 // --- Audio Functions (Moved Up for Safety) ---
 async function startAudio() {
   try {
+    // Reset context if it's in a bad state from previous failed attempts
+    if (audioContext && audioContext.state === 'closed') {
+        audioContext = null;
+    }
+
     if (!audioContext) {
       audioContext = new (window.AudioContext || window.webkitAudioContext)();
     }
@@ -129,11 +136,7 @@ async function startAudio() {
         audio: {
             echoCancellation: false,
             noiseSuppression: false,
-            autoGainControl: false,
-            googEchoCancellation: false,
-            googAutoGainControl: false,
-            googNoiseSuppression: false,
-            googHighpassFilter: false
+            autoGainControl: false
         },
         video: false
     };
@@ -158,7 +161,19 @@ async function startAudio() {
     return true; // Success
   } catch (err) {
     console.error('Error accessing microphone:', err);
-    // Fallback: Try simple constraints if advanced ones fail
+    
+    // Handle Permission Denied specifically
+    if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        if(permissionModal) {
+            permissionModal.classList.remove('hidden');
+            permissionModal.style.display = 'flex';
+        } else {
+            alert("마이크 권한이 차단되었습니다. 브라우저 설정에서 권한을 허용해주세요.");
+        }
+        return false;
+    }
+
+    // Fallback: Try simple constraints if advanced ones fail (and it wasn't a permission issue)
     try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         microphone = audioContext.createMediaStreamSource(stream);
@@ -174,7 +189,15 @@ async function startAudio() {
         return true;
     } catch (fallbackErr) {
         console.error('Fallback failed:', fallbackErr);
-        alert('마이크 권한을 허용해야 소리를 측정할 수 있습니다. 브라우저 설정에서 권한을 확인해주세요.');
+        
+        if (fallbackErr.name === 'NotAllowedError' || fallbackErr.name === 'PermissionDeniedError') {
+             if(permissionModal) {
+                permissionModal.classList.remove('hidden');
+                permissionModal.style.display = 'flex';
+            }
+        } else {
+            alert('마이크 연결에 실패했습니다. 다른 브라우저를 사용해보세요.');
+        }
         return false;
     }
   }

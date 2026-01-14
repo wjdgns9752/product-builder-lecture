@@ -386,6 +386,26 @@
         });
     </script>
 
-    <script type="module" src="main.js?v=12"></script>
+    <!-- Permission Guide Modal -->
+    <div id="permission-modal" class="modal hidden" style="z-index: 2000;">
+        <div class="modal-content">
+            <h2 style="color:#f44336">⚠️ 마이크 권한 필요</h2>
+            <p>소음을 측정하기 위해 마이크 권한이 차단되었습니다.<br>아래 방법으로 권한을 허용해주세요.</p>
+            
+            <div style="text-align:left; background:#eee; padding:15px; border-radius:8px; margin:15px 0; font-size:0.9rem;">
+                <strong>해결 방법:</strong>
+                <ol style="margin:10px 0; padding-left:20px;">
+                    <li>브라우저 주소창 왼쪽의 <strong>🔒 자물쇠 아이콘</strong> 클릭</li>
+                    <li><strong>권한(Permissions)</strong> 또는 <strong>사이트 설정</strong> 클릭</li>
+                    <li>마이크(Microphone)를 <strong>'허용(Allow)'</strong>으로 변경</li>
+                    <li>페이지 <strong>새로고침</strong></li>
+                </ol>
+            </div>
+            
+            <button onclick="location.reload()" class="primary-btn" style="width:100%">확인 후 새로고침</button>
+        </div>
+    </div>
+
+    <script type="module" src="main.js?v=13"></script>
 </body>
 </html>
