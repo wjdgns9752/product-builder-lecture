@@ -34,41 +34,49 @@ const body = document.body;
 // Calibration Elements
 // Onboarding & User Profile Logic
 const userInfoModal = document.getElementById('user-info-modal');
-const btnSaveInfo = document.getElementById('btn-save-info'); // Changed to button ID
 
-let userProfile = JSON.parse(localStorage.getItem('user_profile')) || null;
-
-// Show Onboarding if no profile exists
-if (!userProfile && userInfoModal) {
-    userInfoModal.style.display = 'flex';
+// Check profile on load
+try {
+    const profile = localStorage.getItem('user_profile');
+    if (!profile && userInfoModal) {
+        userInfoModal.style.display = 'flex';
+    }
+} catch (e) {
+    console.error("Storage access error:", e);
+    // If storage fails, we might still want to show/hide modal or just proceed
 }
 
-// Handle Button Click directly
-if (btnSaveInfo) {
-    btnSaveInfo.addEventListener('click', (e) => {
-        // Prevent default just in case
-        e.preventDefault();
-        
-        console.log("Saving user info...");
+// Global function for HTML onclick
+window.saveUserInfo = function() {
+    console.log("Saving user info...");
+    
+    try {
+        const housingType = document.getElementById('housing-type').value;
+        const floorLevel = document.getElementById('floor-level').value;
+        const envType = document.getElementById('env-type').value;
 
-        userProfile = {
-            housingType: document.getElementById('housing-type').value,
-            floorLevel: document.getElementById('floor-level').value,
-            envType: document.getElementById('env-type').value,
+        const userProfile = {
+            housingType: housingType,
+            floorLevel: floorLevel,
+            envType: envType,
             createdAt: new Date().toISOString()
         };
         
         localStorage.setItem('user_profile', JSON.stringify(userProfile));
-        
-        // Force Hide Modal
-        if (userInfoModal) {
-            userInfoModal.style.display = 'none';
-            userInfoModal.classList.add('hidden'); 
-        }
-        
-        alert('설정이 완료되었습니다.\n이제 [모니터링 시작] 버튼을 눌러주세요.');
-    });
-}
+    } catch (e) {
+        console.error("Error saving profile:", e);
+        alert("브라우저 저장소 오류로 정보 저장은 건너뜁니다.");
+    }
+
+    // Force Close Modal
+    const modal = document.getElementById('user-info-modal');
+    if (modal) {
+        modal.style.display = 'none';
+        modal.classList.add('hidden');
+    }
+    
+    alert('설정이 완료되었습니다.\n이제 [모니터링 시작] 버튼을 눌러주세요.');
+};
 
 // ... (Rest of existing variables and logic)
 
