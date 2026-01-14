@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="웹에서 바로 사용하는 실시간 층간소음 측정기 및 소음 모니터입니다. 데시벨(dB) 측정, 소음 기록 저장, 층간소음 법적 기준 정보를 제공합니다. 별도의 설치 없이 마이크로 간편하게 측정하세요.">
-    <meta name="keywords" content="층간소음 측정기, 데시벨 측정, 소음 측정 사이트, dB 측정, 소음 모니터, 층간소음 기준, 소음 기록">
-    <meta property="og:title" content="스마트 층간소음 모니터 - 실시간 데시벨 측정">
-    <meta property="og:description" content="설치 없는 무료 소음 측정기. 층간소음 기록 및 분석 기능을 제공합니다.">
+    <meta name="description" content="웹에서 바로 사용하는 실시간 환경 소음 측정기 (층간소음, 항공기, 도로, 철도). 데시벨(dB) 측정, 소음 기록 저장, 분야별 법적 기준 정보를 제공합니다. 별도의 설치 없이 마이크로 간편하게 측정하세요.">
+    <meta name="keywords" content="소음 측정기, 층간소음, 항공기 소음, 도로교통 소음, 철도 소음, 데시벨 측정, 소음 기준">
+    <meta property="og:title" content="스마트 환경 소음 모니터 - 실시간 데시벨 측정">
+    <meta property="og:description" content="설치 없는 무료 소음 측정기. 층간소음, 항공기, 교통 소음 기록 및 분석 기능을 제공합니다.">
     <meta property="og:type" content="website">
     
-    <title>스마트 층간소음 모니터 | 실시간 dB 측정 및 분석</title>
+    <title>스마트 환경 소음 모니터 (층간/항공/도로/철도) | 실시간 dB 측정</title>
     
-    <link rel="stylesheet" href="style.css?v=2">
+    <link rel="stylesheet" href="style.css?v=5">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔊</text></svg>">
     
     <!-- Google AdSense -->
@@ -21,15 +21,15 @@
 <body>
     <header>
         <div class="header-container">
-            <div class="logo">🔊 Noise Monitor</div>
+            <div class="logo">🔊 Environmental Noise Monitor</div>
         </div>
     </header>
 
     <main class="container">
         <!-- Main Tool Section -->
         <section class="tool-section">
-            <h1>실시간 소음 모니터링</h1>
-            <p class="subtitle">마이크를 통해 주변 소음을 측정하고 층간소음 기준을 확인하세요.</p>
+            <h1>실시간 환경 소음 모니터링</h1>
+            <p class="subtitle">마이크를 통해 층간소음, 항공기, 도로, 철도 소음을 측정하고 기준을 확인하세요.</p>
             
             <canvas id="visualizer" width="600" height="150"></canvas>
             
@@ -148,12 +148,46 @@
             </section>
 
             <section class="content-block">
-                <h3>⚖️ 층간소음의 법적 기준 (한국환경공단)</h3>
-                <p>
-                    공동주택 층간소음의 범위와 기준에 관한 규칙에 따르면, 
-                    <strong>직접충격 소음(발소리 등)</strong>의 경우 주간(06:00~22:00)에는 
-                    <strong>1분간 등가소음도 39dB</strong>, 야간(22:00~06:00)에는 <strong>34dB</strong>을 초과하면 안 됩니다.
-                </p>
+                <h3>⚖️ 환경 소음별 관리 기준 (참고용)</h3>
+                <p>소음의 종류에 따라 적용되는 법적 기준이 다릅니다. 아래 기준을 참고하여 현재 소음 수준을 확인해보세요.</p>
+                
+                <div class="standard-grid">
+                    <div class="std-card">
+                        <h4>🏠 층간소음</h4>
+                        <p class="std-desc">공동주택 층간소음 규칙</p>
+                        <ul>
+                            <li><strong>주간:</strong> 39dB (1분 등가)</li>
+                            <li><strong>야간:</strong> 34dB (1분 등가)</li>
+                            <li><small>* 직접충격음 기준</small></li>
+                        </ul>
+                    </div>
+                    <div class="std-card">
+                        <h4>🚗 도로교통 소음</h4>
+                        <p class="std-desc">소음·진동 관리법 (주거지역)</p>
+                        <ul>
+                            <li><strong>주간:</strong> 68dB 이하</li>
+                            <li><strong>야간:</strong> 58dB 이하</li>
+                            <li><small>* 도로변 주거지 기준</small></li>
+                        </ul>
+                    </div>
+                    <div class="std-card">
+                        <h4>🚆 철도 소음</h4>
+                        <p class="std-desc">철도 소음 한도 (주거지역)</p>
+                        <ul>
+                            <li><strong>주간:</strong> 70dB 이하</li>
+                            <li><strong>야간:</strong> 60dB 이하</li>
+                        </ul>
+                    </div>
+                    <div class="std-card">
+                        <h4>✈️ 항공기 소음</h4>
+                        <p class="std-desc">공항 소음 방지법</p>
+                        <ul>
+                            <li><strong>피해 예상:</strong> 75 WECPNL↑</li>
+                            <li><strong>대책 기준:</strong> 약 70~75dB</li>
+                            <li><small>* 지역/공항별 상이</small></li>
+                        </ul>
+                    </div>
+                </div>
             </section>
 
             <section class="content-block">
@@ -215,11 +249,12 @@
             <div class="survey-section">
                 <label>3. 소음원 추정 (Source)</label>
                 <div class="chip-group" id="source-chips">
-                    <button class="chip" data-type="source" data-val="footsteps">발소리</button>
-                    <button class="chip" data-type="source" data-val="furniture">가구끔</button>
-                    <button class="chip" data-type="source" data-val="voice">말소리</button>
-                    <button class="chip" data-type="source" data-val="electronics">가전제품</button>
-                    <button class="chip" data-type="source" data-val="outside">외부소음</button>
+                    <button class="chip" data-type="source" data-val="footsteps">층간소음(발소리)</button>
+                    <button class="chip" data-type="source" data-val="traffic">도로/차량</button>
+                    <button class="chip" data-type="source" data-val="aircraft">항공기</button>
+                    <button class="chip" data-type="source" data-val="train">철도/지하철</button>
+                    <button class="chip" data-type="source" data-val="construction">공사소음</button>
+                    <button class="chip" data-type="source" data-val="voice">사람/동물</button>
                 </div>
             </div>
 
@@ -227,6 +262,6 @@
         </div>
     </div>
 
-    <script type="module" src="main.js?v=4"></script>
+    <script type="module" src="main.js?v=5"></script>
 </body>
 </html>
