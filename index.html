@@ -11,7 +11,7 @@
     
     <title>스마트 층간소음 모니터 | 실시간 dB 측정 및 분석</title>
     
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=2">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔊</text></svg>">
     
     <!-- Google AdSense -->
@@ -99,6 +99,13 @@
                     <input type="number" id="real-db-input" placeholder="예: 60" min="30" max="120">
                     <span>dB</span>
                 </div>
+                
+                <div class="calib-divider">
+                    <span>또는</span>
+                </div>
+
+                <p class="sub-desc">스마트폰으로 녹음한 핑크 노이즈 파일을 업로드하여 자동 보정 (연구 기반 추정)</p>
+                <input type="file" id="calib-file-upload" accept="audio/*" class="file-input">
             </div>
 
             <div class="calib-step">
@@ -175,25 +182,51 @@
     <!-- Evaluation Modal -->
     <div id="evaluation-modal" class="modal hidden">
         <div class="modal-content">
-            <h2>소음 평가</h2>
+            <h2>소음 평가 (EMA)</h2>
             <p>방금 발생한 소음이 얼마나 거슬렸나요?</p>
-            <div class="rating-scale">
-                <button class="rate-btn" data-val="1">1</button>
-                <button class="rate-btn" data-val="2">2</button>
-                <button class="rate-btn" data-val="3">3</button>
-                <button class="rate-btn" data-val="4">4</button>
-                <button class="rate-btn" data-val="5">5</button>
-                <button class="rate-btn" data-val="6">6</button>
-                <button class="rate-btn" data-val="7">7</button>
-                <button class="rate-btn" data-val="8">8</button>
-                <button class="rate-btn" data-val="9">9</button>
-                <button class="rate-btn" data-val="10">10</button>
+            
+            <div class="survey-section">
+                <label>1. 불쾌감 정도 (1-10)</label>
+                <div class="rating-scale">
+                    <button class="rate-btn" data-val="1">1</button>
+                    <button class="rate-btn" data-val="2">2</button>
+                    <button class="rate-btn" data-val="3">3</button>
+                    <button class="rate-btn" data-val="4">4</button>
+                    <button class="rate-btn" data-val="5">5</button>
+                    <button class="rate-btn" data-val="6">6</button>
+                    <button class="rate-btn" data-val="7">7</button>
+                    <button class="rate-btn" data-val="8">8</button>
+                    <button class="rate-btn" data-val="9">9</button>
+                    <button class="rate-btn" data-val="10">10</button>
+                </div>
+                <div class="selected-rating">선택함: <span id="selected-val">-</span></div>
             </div>
-            <div class="selected-rating">선택함: <span id="selected-val">-</span></div>
+
+            <div class="survey-section">
+                <label>2. 현재 활동 (Activity)</label>
+                <div class="chip-group" id="activity-chips">
+                    <button class="chip" data-type="activity" data-val="working">일/학습</button>
+                    <button class="chip" data-type="activity" data-val="relaxing">휴식</button>
+                    <button class="chip" data-type="activity" data-val="sleeping">수면</button>
+                    <button class="chip" data-type="activity" data-val="housework">가사</button>
+                </div>
+            </div>
+
+            <div class="survey-section">
+                <label>3. 소음원 추정 (Source)</label>
+                <div class="chip-group" id="source-chips">
+                    <button class="chip" data-type="source" data-val="footsteps">발소리</button>
+                    <button class="chip" data-type="source" data-val="furniture">가구끔</button>
+                    <button class="chip" data-type="source" data-val="voice">말소리</button>
+                    <button class="chip" data-type="source" data-val="electronics">가전제품</button>
+                    <button class="chip" data-type="source" data-val="outside">외부소음</button>
+                </div>
+            </div>
+
             <button id="submit-eval" disabled>제출 및 계속하기</button>
         </div>
     </div>
 
-    <script type="module" src="main.js"></script>
+    <script type="module" src="main.js?v=2"></script>
 </body>
 </html>

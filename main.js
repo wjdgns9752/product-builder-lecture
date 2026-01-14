@@ -15,6 +15,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
+// DOM Elements
 const initBtn = document.getElementById('init-btn');
 const meterBar = document.getElementById('meter-bar');
 const bgMarker = document.getElementById('bg-marker');
@@ -31,20 +32,32 @@ const themeToggleBtn = document.getElementById('theme-toggle');
 const body = document.body;
 
 // Calibration Elements
-const calibBtn = document.getElementById('calibration-btn');
-const calibModal = document.getElementById('calibration-modal');
-const playNoiseBtn = document.getElementById('play-noise-btn');
 const realDbInput = document.getElementById('real-db-input');
+const calibFileUpload = document.getElementById('calib-file-upload');
 const currentRawDbSpan = document.getElementById('current-raw-db');
 const saveCalibBtn = document.getElementById('save-calib');
 const cancelCalibBtn = document.getElementById('cancel-calib');
+const calibBtn = document.getElementById('calibration-btn');
+const calibModal = document.getElementById('calibration-modal');
+const playNoiseBtn = document.getElementById('play-noise-btn');
 
-// Modal Elements
+// Evaluation Modal Elements
 const modal = document.getElementById('evaluation-modal');
 const rateBtns = document.querySelectorAll('.rate-btn');
 const submitEvalBtn = document.getElementById('submit-eval');
 const selectedValSpan = document.getElementById('selected-val');
 
+// Survey Elements
+const chipGroups = {
+    activity: document.querySelectorAll('.chip[data-type="activity"]'),
+    source: document.querySelectorAll('.chip[data-type="source"]')
+};
+let surveyData = {
+    activity: null,
+    source: null
+};
+
+// State Variables
 let audioContext;
 let analyser;
 let microphone;
@@ -53,7 +66,7 @@ let isPausedForEval = false;
 let selectedRating = null;
 let currentVolumeValue = 0; 
 
-// Calibration Variables
+// Calibration State
 let dbOffset = parseFloat(localStorage.getItem('dbOffset')) || 0; 
 let noiseNode = null; 
 let isPlayingNoise = false;
@@ -69,12 +82,13 @@ let backgroundLevel = 40; // Default est. dB
 const adaptationRate = 0.005; 
 const decayRate = 0.05;      
 
+// Visualizer State
 let tempCanvas = document.createElement('canvas');
 let tempCtx = tempCanvas.getContext('2d');
 tempCanvas.width = canvas.width;
 tempCanvas.height = canvas.height;
 
-// Theme Logic
+// --- Theme Logic ---
 const currentTheme = localStorage.getItem('theme');
 if (currentTheme === 'dark') {
   body.classList.add('dark-mode');
@@ -85,9 +99,44 @@ themeToggleBtn.addEventListener('click', () => {
   localStorage.setItem('theme', theme);
 });
 
-// Settings Logic
+// --- Settings Logic ---
 thresholdSlider.addEventListener('input', (e) => {
   thresholdVal.textContent = e.target.value;
+});
+
+// --- File Upload Calibration Logic (Research Based) ---
+calibFileUpload.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const arrayBuffer = await file.arrayBuffer();
+        const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+        
+        // Calculate RMS of the file (Channel 0)
+        const rawData = audioBuffer.getChannelData(0);
+        let sum = 0;
+        // Optimization: Sample every 4th point
+        for (let i = 0; i < rawData.length; i += 4) {
+            sum += rawData[i] * rawData[i];
+        }
+        const rms = Math.sqrt(sum / (rawData.length / 4));
+        const fileDbFS = 20 * Math.log10(rms + 0.00001);
+        
+        // Heuristic: Smart Phone Mic Max SPL is often ~100-110dB. 
+        // So 0dBFS (clipping) ~= 100dB SPL.
+        const estimatedMaxSPL = 100; 
+        const estimatedSPL = Math.round(fileDbFS + estimatedMaxSPL);
+        
+        realDbInput.value = estimatedSPL;
+        
+        alert(`[파일 분석 완료]\n평균 레벨: ${fileDbFS.toFixed(1)} dBFS\n추정 SPL: 약 ${estimatedSPL} dB\n\n(참고: 스마트폰 마이크 감도에 따라 오차가 있을 수 있습니다.)`);
+        
+    } catch (err) {
+        console.error('File Analysis Error:', err);
+        alert('오디오 파일을 분석할 수 없습니다. 형식을 확인해주세요.');
+    }
 });
 
 // --- Audio Initialization ---
@@ -109,8 +158,8 @@ async function startAudio() {
     
     microphone = audioContext.createMediaStreamSource(stream);
     analyser = audioContext.createAnalyser();
-    analyser.fftSize = 2048; // Higher resolution for better accuracy
-    analyser.smoothingTimeConstant = 0.6; // Smoother fallback
+    analyser.fftSize = 2048; 
+    analyser.smoothingTimeConstant = 0.6; 
     
     microphone.connect(analyser);
 
@@ -137,22 +186,18 @@ function analyze() {
   const dataArray = new Uint8Array(bufferLength);
   analyser.getByteFrequencyData(dataArray);
 
-  // Calculate RMS (Root Mean Square) for better volume estimation
+  // Calculate RMS
   let sum = 0;
   for(let i = 0; i < bufferLength; i++) {
-    // Convert 0-255 back to linear amplitude roughly
     const x = dataArray[i] / 255; 
     sum += x * x;
   }
   const rms = Math.sqrt(sum / bufferLength);
   
   // Convert RMS to Decibels
-  // 20 * log10(rms) gives dB relative to full scale (usually negative)
-  // We add dbOffset to calibrate it to SPL
-  let rawDb = 20 * Math.log10(rms + 0.00001); // avoid log(0)
+  let rawDb = 20 * Math.log10(rms + 0.00001); 
   let calibratedDb = rawDb + dbOffset;
   
-  // Smooth clamp
   if (calibratedDb < 0) calibratedDb = 0;
   
   currentVolumeValue = calibratedDb;
@@ -174,19 +219,17 @@ function analyze() {
 }
 
 function updateUI(current, bg) {
-  // Visualize 0dB to 100dB roughly
   meterBar.style.width = `${Math.min(100, Math.max(0, current))}%`;
   bgMarker.style.left = `${Math.min(100, Math.max(0, bg))}%`;
   
   currentVolSpan.textContent = Math.round(current);
   bgVolSpan.textContent = Math.round(bg);
   
-  // Color coding
-  if (current > 75) { // Loud
+  if (current > 75) { 
      meterBar.style.backgroundColor = '#f44336'; 
-  } else if (current > 50) { // Moderate
+  } else if (current > 50) { 
      meterBar.style.backgroundColor = '#ffeb3b'; 
-  } else { // Quiet
+  } else { 
      meterBar.style.backgroundColor = '#4caf50'; 
   }
 }
@@ -197,7 +240,6 @@ function checkThreshold(current, bg) {
       return;
   }
 
-  // Minimum noise floor to ignore
   if (current < 30) { 
       noiseStartTime = 0;
       durationBar.style.width = '0%';
@@ -206,10 +248,6 @@ function checkThreshold(current, bg) {
   }
 
   const percentIncrease = parseInt(thresholdSlider.value);
-  // Threshold calculation based on dB difference isn't percentage based usually,
-  // but let's keep the user's "sensitivity" slider concept.
-  // 10% sensitivity = trigger if current > bg + 5dB (example)
-  // Let's map 10-100 slider to 3dB - 20dB gap
   const triggerGap = 25 - (percentIncrease / 100 * 20); 
   const triggerLevel = bg + triggerGap;
   
@@ -231,8 +269,6 @@ function checkThreshold(current, bg) {
       statusText.textContent = "상태: 감지 중...";
   }
 }
-
-// ... (triggerAlarm, playBeep, evaluation logic, Firebase save remain similar but updated with vars)
 
 function triggerAlarm() {
   if (isPausedForEval) return; 
@@ -296,14 +332,13 @@ saveCalibBtn.addEventListener('click', () => {
 function playPinkNoise() {
     if (!audioContext) return;
     
-    // Create Pink Noise Buffer (Simple approximation)
+    // Pink Noise Generator
     const bufferSize = 4096;
     const pinkBuffer = audioContext.createBuffer(1, audioContext.sampleRate * 2, audioContext.sampleRate);
     const data = pinkBuffer.getChannelData(0);
     
     let b0=0, b1=0, b2=0, b3=0, b4=0, b5=0, b6=0;
     
-    // Paul Kellett's refined method
     for(let i=0; i<data.length; i++) {
         const white = Math.random() * 2 - 1;
         b0 = 0.99886 * b0 + white * 0.0555179;
@@ -313,7 +348,7 @@ function playPinkNoise() {
         b4 = 0.55000 * b4 + white * 0.5329522;
         b5 = -0.7616 * b5 - white * 0.0168980;
         data[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362;
-        data[i] *= 0.11; // Adjust volume
+        data[i] *= 0.11; 
         b6 = white * 0.115926;
     }
 
@@ -336,7 +371,8 @@ function stopPinkNoise() {
     playNoiseBtn.textContent = "🔊 핑크 노이즈 재생";
 }
 
-// ... (Rest of existing functions: showEvaluationModal, resetRatingUI, rateBtns, submitEvalBtn, drawSpectrogram)
+// --- Evaluation / Survey Logic ---
+
 function showEvaluationModal() {
   modal.classList.remove('hidden');
   resetRatingUI();
@@ -350,31 +386,60 @@ function resetRatingUI() {
   selectedRating = null;
   selectedValSpan.textContent = '-';
   submitEvalBtn.disabled = true;
+  
   rateBtns.forEach(btn => btn.classList.remove('selected'));
+  
+  Object.values(chipGroups).forEach(group => {
+      group.forEach(chip => chip.classList.remove('selected'));
+  });
+  surveyData = { activity: null, source: null };
 }
 
+// Handle Rating Click
 rateBtns.forEach(btn => {
   btn.addEventListener('click', () => {
     rateBtns.forEach(b => b.classList.remove('selected'));
     btn.classList.add('selected');
     selectedRating = btn.dataset.val;
     selectedValSpan.textContent = selectedRating;
-    submitEvalBtn.disabled = false;
+    checkSubmitReady();
   });
 });
+
+// Handle Chip Click
+Object.entries(chipGroups).forEach(([type, chips]) => {
+    chips.forEach(chip => {
+        chip.addEventListener('click', () => {
+            chips.forEach(c => c.classList.remove('selected'));
+            chip.classList.add('selected');
+            surveyData[type] = chip.dataset.val;
+            checkSubmitReady();
+        });
+    });
+});
+
+function checkSubmitReady() {
+    submitEvalBtn.disabled = (selectedRating === null);
+}
 
 submitEvalBtn.addEventListener('click', async () => {
   if (selectedRating === null) return;
   
-  // Save to Firebase
   try {
-    await addDoc(collection(db, "noise_evaluations"), {
+    const payload = {
       rating: parseInt(selectedRating, 10),
-      noiseLevel: currentVolumeValue,
+      noiseLevel: parseFloat(currentVolumeValue.toFixed(1)),
       backgroundLevel: Math.round(backgroundLevel),
+      context: {
+          activity: surveyData.activity || 'unknown',
+          source: surveyData.source || 'unknown'
+      },
+      userAgent: navigator.userAgent, 
       timestamp: serverTimestamp()
-    });
-    console.log("Firebase storage successful");
+    };
+
+    await addDoc(collection(db, "noise_evaluations"), payload);
+    console.log("Firebase storage successful", payload);
   } catch (err) {
     console.error('Firebase storage error:', err);
   }
@@ -390,6 +455,7 @@ submitEvalBtn.addEventListener('click', async () => {
   }
 });
 
+// --- Visualizer ---
 function drawSpectrogram() {
   requestAnimationFrame(drawSpectrogram);
   if (!isMonitoring || isPausedForEval) return;
