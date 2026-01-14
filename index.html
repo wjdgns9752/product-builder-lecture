@@ -239,7 +239,7 @@
         <div class="footer-content">
             <p>&copy; 2024 Noise Monitor. All rights reserved.</p>
             <div class="footer-links">
-                <a href="#" onclick="alert('개인정보처리방침: 본 서비스는 사용자의 오디오 데이터를 서버로 전송하거나 저장하지 않습니다. 모든 오디오 처리는 사용자의 브라우저 내에서 실시간으로 이루어집니다. 평가 데이터(점수, 시간)만 통계 목적으로 익명 저장됩니다.')">개인정보처리방침</a>
+                <a href="#" onclick="alert('개인정보처리방침: 본 서비스는 사용자의 오디오 데이터를 서버로 자동 전송하거나 저장하지 않습니다. 모든 오디오 처리는 브라우저 내에서 이루어지며, 녹음된 파일은 사용자의 기기에만 임시 저장(다운로드 가능)됩니다. 평가 데이터(점수, 시간, 태그)만 통계 목적으로 익명 저장됩니다.')">개인정보처리방침</a>
                 <a href="#">이용약관</a>
             </div>
             <p class="disclaimer">본 서비스는 법적 효력이 있는 측정 도구가 아닙니다. 정확한 측정은 전문 소음계(Sound Level Meter)를 사용하시기 바랍니다.</p>
@@ -251,6 +251,12 @@
         <div class="modal-content">
             <h2>소음 평가 (EMA)</h2>
             <p>방금 발생한 소음이 얼마나 거슬렸나요?</p>
+            
+            <div class="audio-preview-section" id="audio-preview-container" style="display:none; margin-bottom: 20px; padding: 15px; background: #f0f0f0; border-radius: 8px;">
+                <label style="display:block; margin-bottom:10px; font-weight:bold;">🎤 녹음된 소음 확인</label>
+                <audio id="noise-player" controls style="width:100%; margin-bottom:10px;"></audio>
+                <a id="download-recording" href="#" class="secondary-btn" style="display:inline-block; font-size:0.9rem; text-decoration:none;">💾 녹음 파일 다운로드</a>
+            </div>
             
             <div class="survey-section">
                 <label>1. 불쾌감 정도 (1-10)</label>

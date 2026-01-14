@@ -46,6 +46,9 @@ const modal = document.getElementById('evaluation-modal');
 const rateBtns = document.querySelectorAll('.rate-btn');
 const submitEvalBtn = document.getElementById('submit-eval');
 const selectedValSpan = document.getElementById('selected-val');
+const audioPreviewContainer = document.getElementById('audio-preview-container');
+const noisePlayer = document.getElementById('noise-player');
+const downloadLink = document.getElementById('download-recording');
 
 // Classifier Elements
 const classCards = {
@@ -70,6 +73,13 @@ let surveyData = {
 let audioContext;
 let analyser;
 let microphone;
+let globalStream = null; // Store stream for MediaRecorder
+let mediaRecorder = null;
+let audioChunks = [];
+let isRecording = false;
+let recordedBlob = null;
+let currentAudioUrl = null;
+
 let isMonitoring = false;
 let isPausedForEval = false; 
 let isCalibrating = false; // Prevents alarm during calibration
@@ -148,6 +158,7 @@ async function startAudio() {
     };
 
     const stream = await navigator.mediaDevices.getUserMedia(constraints);
+    globalStream = stream; // Store for MediaRecorder
     
     microphone = audioContext.createMediaStreamSource(stream);
     analyser = audioContext.createAnalyser();
@@ -178,6 +189,7 @@ async function startAudio() {
     // Simple fallback
     try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        globalStream = stream; // Store for MediaRecorder
         microphone = audioContext.createMediaStreamSource(stream);
         analyser = audioContext.createAnalyser();
         analyser.fftSize = 2048; 
@@ -192,6 +204,60 @@ async function startAudio() {
         return false;
     }
   }
+}
+
+// --- Recorder Logic ---
+function startRecording() {
+    if (!globalStream || isRecording) return;
+    try {
+        mediaRecorder = new MediaRecorder(globalStream);
+        audioChunks = [];
+        
+        mediaRecorder.ondataavailable = (event) => {
+            if (event.data.size > 0) {
+                audioChunks.push(event.data);
+            }
+        };
+
+        mediaRecorder.start();
+        isRecording = true;
+        // console.log("Recording started...");
+    } catch (e) {
+        console.error("MediaRecorder start failed", e);
+    }
+}
+
+function stopRecording(save = false) {
+    if (!mediaRecorder || !isRecording) return;
+    
+    // We need to wait for the final 'dataavailable' event
+    // So we wrap the stop logic in a promise or handle it in onstop
+    
+    return new Promise((resolve) => {
+        mediaRecorder.onstop = () => {
+            isRecording = false;
+            // console.log("Recording stopped. Saved:", save);
+            if (save && audioChunks.length > 0) {
+                recordedBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                resolve(recordedBlob);
+            } else {
+                recordedBlob = null;
+                resolve(null);
+            }
+        };
+        mediaRecorder.stop();
+    });
+}
+
+function cancelRecording() {
+    if (isRecording && mediaRecorder) {
+        // Stop without saving intent (though stop() always fires dataavailable, logic above handles save flag)
+        mediaRecorder.stop(); 
+        isRecording = false;
+        audioChunks = []; // Clear immediately
+        recordedBlob = null;
+        // console.log("Recording cancelled.");
+    }
 }
 
 // --- Device Detection Helper ---
@@ -367,6 +433,7 @@ function checkThreshold(current, bg) {
   }
   if (current < 30) { 
       noiseStartTime = 0;
+      cancelRecording(); // Stop if too quiet
       durationBar.style.width = '0%';
       statusText.textContent = "상태: 감지 중 (조용함)";
       return;
@@ -374,24 +441,32 @@ function checkThreshold(current, bg) {
   const triggerGap = 25 - (parseInt(thresholdSlider.value) / 100 * 20); 
   const triggerLevel = bg + triggerGap;
   if (current > triggerLevel) {
-      if (noiseStartTime === 0) noiseStartTime = Date.now();
+      if (noiseStartTime === 0) {
+          noiseStartTime = Date.now();
+          startRecording(); // Start recording on first breach
+      }
       const duration = Date.now() - noiseStartTime;
       durationBar.style.width = `${Math.min(100, (duration / TRIGGER_DURATION_MS) * 100)}%`;
       statusText.textContent = `상태: 소음 감지! 기준+${Math.round(triggerGap)}dB (${(duration/1000).toFixed(1)}s)`;
       if (duration > TRIGGER_DURATION_MS) triggerAlarm();
   } else {
       noiseStartTime = 0;
+      cancelRecording(); // Reset if it dips below trigger
       durationBar.style.width = '0%';
       statusText.textContent = "상태: 감지 중...";
   }
 }
 
-function triggerAlarm() {
+async function triggerAlarm() {
   if (isPausedForEval) return; 
   isPausedForEval = true; 
   noiseStartTime = 0;
   durationBar.style.width = '100%';
   statusText.textContent = "상태: 지속적 소음 발생! 평가 필요";
+  
+  // Stop and save recording
+  recordedBlob = await stopRecording(true);
+
   if (audioAlarmCheckbox.checked) playBeep();
   showEvaluationModal();
 }
@@ -399,6 +474,23 @@ function triggerAlarm() {
 function showEvaluationModal() {
   modal.classList.remove('hidden');
   resetRatingUI();
+
+  // Setup Audio Player if blob exists
+  if (recordedBlob) {
+      audioPreviewContainer.style.display = 'block';
+      
+      if (currentAudioUrl) {
+          URL.revokeObjectURL(currentAudioUrl);
+      }
+      currentAudioUrl = URL.createObjectURL(recordedBlob);
+      
+      noisePlayer.src = currentAudioUrl;
+      downloadLink.href = currentAudioUrl;
+      const dateStr = new Date().toLocaleString().replace(/[:\/\s]/g, '-');
+      downloadLink.download = `noise-record-${dateStr}.webm`;
+  } else {
+      audioPreviewContainer.style.display = 'none';
+  }
 }
 
 function hideEvaluationModal() {
@@ -484,6 +576,8 @@ submitEvalBtn.addEventListener('click', async () => {
       userProfile: profile,
       userAgent: navigator.userAgent, 
       timestamp: serverTimestamp()
+      // Note: We are not uploading the audio blob to Firestore here because it requires Storage setup.
+      // The user can download it locally.
     };
     await addDoc(collection(db, "noise_evaluations"), payload);
   } catch (err) { console.error(err); }
@@ -493,6 +587,13 @@ submitEvalBtn.addEventListener('click', async () => {
   isPausedForEval = false; 
   meterBar.style.width = '0%';
   durationBar.style.width = '0%';
+  
+  recordedBlob = null; // Clear memory
+  if (currentAudioUrl) {
+      URL.revokeObjectURL(currentAudioUrl);
+      currentAudioUrl = null;
+  }
+  
   if (audioContext && audioContext.state === 'suspended') await audioContext.resume();
 });
 
