@@ -135,13 +135,6 @@ thresholdSlider.addEventListener('input', (e) => {
 
 // --- Audio Functions ---
 async function startAudio() {
-  if (isMonitoring) {
-      if (audioContext && audioContext.state === 'suspended') {
-          await audioContext.resume();
-      }
-      return true;
-  }
-
   try {
     if (audioContext && audioContext.state === 'closed') {
         audioContext = null;
@@ -154,32 +147,37 @@ async function startAudio() {
       await audioContext.resume();
     }
 
-    const constraints = {
-        audio: {
-            echoCancellation: false,
-            noiseSuppression: false,
-            autoGainControl: false
-        },
-        video: false
-    };
+    // Only create stream if not already created
+    if (!microphone) {
+        const constraints = {
+            audio: {
+                echoCancellation: false,
+                noiseSuppression: false,
+                autoGainControl: false
+            },
+            video: false
+        };
 
-    const stream = await navigator.mediaDevices.getUserMedia(constraints);
-    globalStream = stream; // Store for MediaRecorder
-    
-    microphone = audioContext.createMediaStreamSource(stream);
-    analyser = audioContext.createAnalyser();
-    analyser.fftSize = 2048; 
-    analyser.smoothingTimeConstant = 0.6; 
-    
-    microphone.connect(analyser);
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        globalStream = stream; // Store for MediaRecorder
+        
+        microphone = audioContext.createMediaStreamSource(stream);
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 2048; 
+        analyser.smoothingTimeConstant = 0.6; 
+        
+        microphone.connect(analyser);
+    }
 
     initBtn.style.display = 'none';
     recordBtn.classList.remove('hidden'); // Show record button
-    isMonitoring = true;
-    statusText.textContent = "상태: 모니터링 중...";
     
-    analyze();
-    drawSpectrogram();
+    if (!isMonitoring) {
+        isMonitoring = true;
+        statusText.textContent = "상태: 모니터링 중...";
+        analyze();
+        drawSpectrogram();
+    }
     
     return true; 
   } catch (err) {
@@ -195,17 +193,22 @@ async function startAudio() {
     }
     // Simple fallback
     try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        globalStream = stream; // Store for MediaRecorder
-        microphone = audioContext.createMediaStreamSource(stream);
-        analyser = audioContext.createAnalyser();
-        analyser.fftSize = 2048; 
-        analyser.smoothingTimeConstant = 0.6; 
-        microphone.connect(analyser);
+        if (!microphone) {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            globalStream = stream;
+            microphone = audioContext.createMediaStreamSource(stream);
+            analyser = audioContext.createAnalyser();
+            analyser.fftSize = 2048; 
+            analyser.smoothingTimeConstant = 0.6; 
+            microphone.connect(analyser);
+        }
         initBtn.style.display = 'none';
-        isMonitoring = true;
-        analyze();
-        drawSpectrogram();
+        
+        if (!isMonitoring) {
+            isMonitoring = true;
+            analyze();
+            drawSpectrogram();
+        }
         return true;
     } catch (fallbackErr) {
         return false;
@@ -584,6 +587,22 @@ function updateAnalysis() {
     const valIr = document.getElementById('val-ir');
     if (valIr) valIr.textContent = fluctuation.toFixed(1); // Using Fluctuation as simplified IR
 
+    // Dynamic Descriptions
+    const descEvent = document.getElementById('desc-event');
+    const descIr = document.getElementById('desc-ir');
+    
+    if (descEvent) {
+        if (eventImpact < 3) descEvent.textContent = "안정적 (무시 가능)";
+        else if (eventImpact < 8) descEvent.textContent = "약간 거슬림 (생활)";
+        else descEvent.textContent = "⚠️ 매우 불쾌함 (충격음)";
+    }
+    
+    if (descIr) {
+        if (fluctuation < 10) descIr.textContent = "지속음 (냉장고/팬)";
+        else if (fluctuation < 30) descIr.textContent = "일반적 변동";
+        else descIr.textContent = "간헐적 소음 (대화/TV)";
+    }
+
     // Harmonica 'Pencil' Visualization
     const pencilWrapper = document.querySelector('.pencil-wrapper');
     const pencilBody = document.getElementById('pencil-body');
@@ -780,6 +799,11 @@ saveCalibBtn.addEventListener('click', () => {
 
 // Manual Record Button Logic
 recordBtn.addEventListener('click', async () => {
+    // Ensure mic is on
+    if (!audioContext) {
+        await startAudio();
+    }
+    
     if (!isRecording) {
         // Start Recording
         startRecording();
