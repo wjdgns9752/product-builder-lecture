@@ -93,20 +93,29 @@
                 <h3>📊 소음 성향 정밀 분석 (Harmonica & Event)</h3>
                 
                 <div class="harmonica-visual">
-                    <div class="harmonica-bar-container">
-                        <!-- Background Component (L90) -->
-                        <div id="harmonica-base" class="h-bar base">
-                            <span class="h-label">배경(L90)</span>
-                        </div>
-                        <!-- Event Component (Leq - L90) -->
-                        <div id="harmonica-event" class="h-bar event">
-                            <span class="h-label">돌발(Event)</span>
+                    <div class="pencil-legend">
+                        <span class="legend-item"><span class="dot base"></span>배경(L90)</span>
+                        <span class="legend-item"><span class="dot event"></span>돌발(Event)</span>
+                    </div>
+                    
+                    <div class="harmonica-pencil-container">
+                        <!-- The Pencil Visual -->
+                        <div class="pencil-wrapper">
+                            <div id="pencil-body" class="pencil-part body">
+                                <span class="p-label" id="label-body">40</span>
+                            </div>
+                            <div id="pencil-tip" class="pencil-part tip">
+                                <span class="p-label" id="label-tip">+5</span>
+                            </div>
                         </div>
                     </div>
+
                     <div class="harmonica-scale">
-                        <span>30dB</span>
-                        <span>60dB</span>
-                        <span>90dB</span>
+                        <span>0</span>
+                        <span>30</span>
+                        <span>60</span>
+                        <span>90</span>
+                        <span>120 dB</span>
                     </div>
                 </div>
 

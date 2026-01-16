@@ -584,17 +584,33 @@ function updateAnalysis() {
     const valIr = document.getElementById('val-ir');
     if (valIr) valIr.textContent = fluctuation.toFixed(1); // Using Fluctuation as simplified IR
 
-    // Harmonica Bar Visualization
-    const baseBar = document.getElementById('harmonica-base');
-    const eventBar = document.getElementById('harmonica-event');
-    
-    if (baseBar && eventBar) {
-        // Normalize to 0-100 range roughly (assuming max 100dB)
-        const baseWidth = Math.min(100, L90);
-        const eventWidth = Math.min(100 - baseWidth, eventImpact);
+    // Harmonica 'Pencil' Visualization
+    const pencilWrapper = document.querySelector('.pencil-wrapper');
+    const pencilBody = document.getElementById('pencil-body');
+    const pencilTip = document.getElementById('pencil-tip');
+    const labelBody = document.getElementById('label-body');
+    const labelTip = document.getElementById('label-tip');
+
+    if (pencilWrapper && pencilBody && pencilTip) {
+        // Map dB to % (Scale: 0dB to 120dB)
+        const maxScale = 120;
+        const totalLeqPercent = Math.min(100, Math.max(0, (Leq / maxScale) * 100));
         
-        baseBar.style.width = `${baseWidth}%`;
-        eventBar.style.width = `${eventWidth}%`;
+        // Width of the entire pencil (Total Leq)
+        pencilWrapper.style.width = `${totalLeqPercent}%`;
+        
+        // Inside the pencil: split between Body (L90) and Tip (Event)
+        // Ratio of Background to Total
+        const totalVal = Math.max(0.1, Leq); // Avoid divide by zero
+        const bodyPercent = (L90 / totalVal) * 100;
+        const tipPercent = 100 - bodyPercent;
+
+        pencilBody.style.width = `${bodyPercent}%`;
+        pencilTip.style.width = `${tipPercent}%`;
+        
+        // Update Labels inside pencil
+        if (labelBody) labelBody.textContent = L90.toFixed(0);
+        if (labelTip) labelTip.textContent = eventImpact > 1 ? `+${eventImpact.toFixed(0)}` : '';
     }
     
     // 4. Generate Comment (Contextual Analysis)
