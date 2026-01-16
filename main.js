@@ -1,7 +1,6 @@
 // Firebase Integration
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getFirestore, collection, addDoc, serverTimestamp, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyB80YVLtFSBs2l3TiazSRj0xsgOBeUZG4I",
@@ -15,7 +14,6 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
-const auth = getAuth(app);
 
 // DOM Elements
 const initBtn = document.getElementById('init-btn');
@@ -34,89 +32,58 @@ const audioAlarmCheckbox = document.getElementById('audio-alarm');
 const themeToggleBtn = document.getElementById('theme-toggle');
 const body = document.body;
 
-// Auth Elements
+// Auth / User Elements
 const authModal = document.getElementById('auth-modal');
-const authEmailInput = document.getElementById('auth-email');
-const authPassInput = document.getElementById('auth-password');
-const authErrorMsg = document.getElementById('auth-error');
-const btnLogin = document.getElementById('btn-login');
-const btnSignup = document.getElementById('btn-signup');
-const userEmailSpan = document.getElementById('user-email');
-const authBtn = document.getElementById('auth-btn');
+const authNicknameInput = document.getElementById('auth-nickname');
+const btnStart = document.getElementById('btn-start');
+const userNicknameDisplay = document.getElementById('user-nickname-display');
 const userInfoModal = document.getElementById('user-info-modal'); // Onboarding
 
-let currentUser = null;
+let currentUserId = localStorage.getItem('user_uid'); // Persist ID
+let currentUserNickname = localStorage.getItem('user_nickname');
 let userProfile = null;
 
-// --- Auth Logic ---
-onAuthStateChanged(auth, async (user) => {
-    if (user) {
-        // Logged In
-        currentUser = user;
-        userEmailSpan.textContent = user.email.split('@')[0];
-        authBtn.textContent = "로그아웃";
+// --- Auth / Nickname Logic ---
+function checkAuth() {
+    if (!currentUserId || !currentUserNickname) {
+        // No User -> Show Nickname Modal
+        authModal.classList.remove('hidden');
+        userInfoModal.classList.add('hidden');
+    } else {
+        // User Exists
+        userNicknameDisplay.textContent = currentUserNickname;
+        authModal.classList.add('hidden');
+        checkUserProfile(currentUserId);
+    }
+}
+
+// Generate a simple UUID if not exists
+function generateUUID() {
+    return 'user_' + Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
+}
+
+btnStart.addEventListener('click', (e) => {
+    e.preventDefault();
+    const nickname = authNicknameInput.value.trim();
+    
+    if (nickname) {
+        // Create new session
+        currentUserId = generateUUID();
+        currentUserNickname = nickname;
+        
+        localStorage.setItem('user_uid', currentUserId);
+        localStorage.setItem('user_nickname', currentUserNickname);
+        
+        userNicknameDisplay.textContent = currentUserNickname;
         authModal.classList.add('hidden');
         
-        // Check Profile
-        await checkUserProfile(user.uid);
+        // New user needs profile setup
+        showOnboarding(false);
     } else {
-        // Logged Out
-        currentUser = null;
-        userEmailSpan.textContent = "Guest";
-        authBtn.textContent = "로그인";
-        authModal.classList.remove('hidden'); // Show Login Modal
-        userInfoModal.classList.add('hidden');
-        
-        // Reset Inputs
-        authEmailInput.value = '';
-        authPassInput.value = '';
+        alert("닉네임을 입력해주세요.");
     }
 });
 
-authBtn.addEventListener('click', () => {
-    if (currentUser) {
-        signOut(auth).then(() => {
-            alert("로그아웃 되었습니다.");
-            location.reload();
-        });
-    } else {
-        authModal.classList.remove('hidden');
-    }
-});
-
-btnLogin.addEventListener('click', (e) => {
-    e.preventDefault();
-    const email = authEmailInput.value;
-    const pass = authPassInput.value;
-    
-    signInWithEmailAndPassword(auth, email, pass)
-        .then(() => {
-            // Success handled by onAuthStateChanged
-        })
-        .catch((error) => {
-            showAuthError(error.message);
-        });
-});
-
-btnSignup.addEventListener('click', (e) => {
-    e.preventDefault();
-    const email = authEmailInput.value;
-    const pass = authPassInput.value;
-    
-    createUserWithEmailAndPassword(auth, email, pass)
-        .then(() => {
-            alert("계정이 생성되었습니다!");
-            // Success handled by onAuthStateChanged
-        })
-        .catch((error) => {
-            showAuthError(error.message);
-        });
-});
-
-function showAuthError(msg) {
-    authErrorMsg.textContent = msg.replace('Firebase: ', '');
-    authErrorMsg.style.display = 'block';
-}
 
 async function checkUserProfile(uid) {
     try {
@@ -134,7 +101,7 @@ async function checkUserProfile(uid) {
                 showOnboarding(true); // Show Re-check
             }
         } else {
-            // No Profile -> Show Onboarding
+            // No Profile in DB -> Show Onboarding
             showOnboarding(false);
         }
     } catch (e) {
@@ -153,31 +120,37 @@ function showOnboarding(isUpdate) {
 
 // Global function for Onboarding Form (Called from HTML button)
 window.saveUserInfo = async function() {
-    if (!currentUser) return;
+    if (!currentUserId) return;
     
     const housingType = document.getElementById('housing-type').value;
     const floorLevel = document.getElementById('floor-level').value;
     const envType = document.getElementById('env-type').value;
 
     const profileData = {
+        nickname: currentUserNickname,
         housingType,
         floorLevel,
         envType,
-        updatedAt: Date.now(),
-        email: currentUser.email
+        updatedAt: Date.now()
     };
 
     try {
-        await setDoc(doc(db, "users", currentUser.uid), profileData, { merge: true });
+        await setDoc(doc(db, "users", currentUserId), profileData, { merge: true });
         userProfile = profileData;
         userInfoModal.classList.add('hidden');
         userInfoModal.style.display = 'none';
-        alert("정보가 저장되었습니다.");
+        alert("시작합니다!");
     } catch (e) {
         console.error("Save failed:", e);
-        alert("저장 중 오류가 발생했습니다.");
+        // Fallback for offline or permission issues
+        userInfoModal.classList.add('hidden');
+        userInfoModal.style.display = 'none';
+        alert("시작합니다! (로컬 저장됨)");
     }
 };
+
+// Init Check
+checkAuth();
 
 // Calibration Elements
 const realDbInput = document.getElementById('real-db-input');

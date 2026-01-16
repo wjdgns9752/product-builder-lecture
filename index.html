@@ -11,6 +11,10 @@
     
     <title>스마트 환경 소음 모니터 (층간/항공/도로/철도) | 실시간 dB 측정</title>
     
+    <!-- TensorFlow.js & YAMNet -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/yamnet@latest/dist/yamnet.min.js"></script>
+
     <link rel="stylesheet" href="style.css?v=14">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔊</text></svg>">
     
@@ -24,8 +28,7 @@
         <div class="header-container">
             <div class="logo">🔊 Environmental Noise Monitor</div>
             <div id="user-status-container" style="font-size: 0.9rem;">
-                <span id="user-email" style="margin-right: 10px;">Guest</span>
-                <button id="auth-btn" class="secondary-btn" style="padding: 4px 10px; font-size: 0.8rem;">로그인</button>
+                <span id="user-nickname-display" style="font-weight: bold; color: var(--primary-color);">Guest</span> 님
             </div>
         </div>
     </header>
@@ -422,23 +425,18 @@
         </div>
     </div>
 
-    <!-- Auth Modal -->
+    <!-- Auth Modal (Simplified to Nickname) -->
     <div id="auth-modal" class="modal hidden" style="z-index: 2000;">
         <div class="modal-content" style="max-width: 400px;">
-            <h2>🔐 로그인 / 회원가입</h2>
-            <p class="desc">나만의 소음 데이터를 관리하려면<br>로그인이 필요합니다.</p>
+            <h2>👋 환영합니다!</h2>
+            <p class="desc">서비스 이용을 위해 닉네임을 설정해주세요.</p>
             
             <form id="auth-form" style="margin-top: 20px;">
-                <div class="input-group" style="flex-direction: column; align-items: stretch; gap: 10px;">
-                    <input type="email" id="auth-email" placeholder="이메일 (example@email.com)" required style="width: 100%; padding: 12px;">
-                    <input type="password" id="auth-password" placeholder="비밀번호 (6자리 이상)" required style="width: 100%; padding: 12px;">
+                <div class="input-group" style="justify-content: center;">
+                    <input type="text" id="auth-nickname" placeholder="사용할 닉네임 입력" required style="width: 100%; padding: 12px; font-size: 1rem; text-align: center;">
                 </div>
-                <p id="auth-error" style="color: #f44336; font-size: 0.9rem; margin: 10px 0; display: none;"></p>
                 
-                <div class="btn-group" style="flex-direction: column; gap: 10px; margin-top: 20px;">
-                    <button type="submit" id="btn-login" class="primary-btn" style="width: 100%;">로그인</button>
-                    <button type="button" id="btn-signup" class="secondary-btn" style="width: 100%;">새 계정 만들기 (회원가입)</button>
-                </div>
+                <button type="submit" id="btn-start" class="primary-btn" style="width: 100%; margin-top: 20px;">시작하기</button>
             </form>
         </div>
     </div>
