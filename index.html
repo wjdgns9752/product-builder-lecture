@@ -512,6 +512,37 @@
         </div>
     </div>
 
+    <!-- Emergency Script for Onboarding -->
+    <script>
+        function saveUserInfo() {
+            const btn = document.getElementById('btn-save-info');
+            if(btn) btn.textContent = "저장 중...";
+
+            // 1. Get Values
+            const housing = document.getElementById('housing-type').value;
+            const floor = document.getElementById('floor-level').value;
+            const env = document.getElementById('env-type').value;
+
+            // 2. Save to LocalStorage (Reliable)
+            const profile = {
+                housingType: housing,
+                floorLevel: floor,
+                envType: env,
+                updatedAt: Date.now()
+            };
+            localStorage.setItem('user_profile', JSON.stringify(profile));
+
+            // 3. Hide Modal (Force)
+            const modal = document.getElementById('user-info-modal');
+            if(modal) {
+                modal.style.display = 'none';
+                modal.classList.add('hidden');
+            }
+
+            alert("설정이 완료되었습니다. 모니터링을 시작합니다.");
+        }
+    </script>
+
     <script type="module" src="main.js?v=14"></script>
 </body>
 </html>

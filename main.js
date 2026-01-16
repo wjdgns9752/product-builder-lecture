@@ -122,51 +122,6 @@ function showOnboarding(isUpdate) {
     }
 }
 
-// Global function for Onboarding Form
-window.saveUserInfo = async function() {
-    // alert("저장 시작!"); // Debug
-    
-    const btn = document.getElementById('btn-save-info');
-    if(btn) btn.textContent = "저장 중...";
-
-    if (!currentUserId) {
-        currentUserId = generateUUID();
-        localStorage.setItem('user_uid', currentUserId);
-    }
-    
-    const housingType = document.getElementById('housing-type').value;
-    const floorLevel = document.getElementById('floor-level').value;
-    const envType = document.getElementById('env-type').value;
-
-    const profileData = {
-        nickname: currentUserNickname || 'Guest',
-        housingType,
-        floorLevel,
-        envType,
-        updatedAt: Date.now()
-    };
-
-    try {
-        await setDoc(doc(db, "users", currentUserId), profileData, { merge: true });
-        userProfile = profileData;
-        localStorage.setItem('user_profile', JSON.stringify(profileData)); // Backup
-        
-        alert("정보가 저장되었습니다. 시작합니다!");
-    } catch (err) {
-        console.error("DB Save failed, using local:", err);
-        // Fallback: Save locally and proceed
-        localStorage.setItem('user_profile', JSON.stringify(profileData));
-        userProfile = profileData;
-        alert("시작합니다! (로컬 모드)");
-    } finally {
-        userInfoModal.classList.add('hidden');
-        userInfoModal.style.display = 'none';
-        if(btn) btn.textContent = "입력 완료 및 시작";
-    }
-};
-
-document.getElementById('btn-save-info')?.addEventListener('click', saveUserInfo);
-
 // Init Check
 checkAuth();
 
