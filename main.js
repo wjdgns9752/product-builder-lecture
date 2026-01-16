@@ -164,18 +164,29 @@ async function setupAI(stream) {
     const meterFill = document.getElementById('ai-meter-fill');
     const resultText = document.getElementById('ai-result-text');
     
+    // 0. Wait for Library (Polling)
+    let retries = 0;
+    while (typeof window.yamnet === 'undefined' && retries < 60) { // Wait up to 30 sec
+        if (statusLabel) statusLabel.textContent = `⏳ AI 라이브러리 로딩 중... (${retries})`;
+        await new Promise(r => setTimeout(r, 500));
+        retries++;
+    }
+
+    if (typeof window.yamnet === 'undefined') {
+        if (statusLabel) statusLabel.textContent = "⚠️ AI 로드 실패 (새로고침 권장)";
+        return;
+    }
+
     try {
-        // 1. Load Model (Directly from import)
+        // 1. Load Model
         if (!aiModel) {
             statusLabel.textContent = "⏳ AI 모델 다운로드 중...";
-            // Explicitly set backend to 'webgl' or 'cpu' to avoid auto-detection issues? 
-            // Usually not needed, but good to know.
-            await tf.ready(); 
-            aiModel = await yamnet.load();
+            await tf.ready(); // Ensure TF is ready
+            aiModel = await window.yamnet.load();
             statusLabel.textContent = "✅ AI 준비 완료 (분석 중)";
         }
         
-        // 2. Hook into existing AudioContext (Best for compatibility)
+        // ... (Audio Setup) ...
         if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
         
         const micInput = audioContext.createMediaStreamSource(stream);
