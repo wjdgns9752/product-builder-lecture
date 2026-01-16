@@ -43,6 +43,11 @@
                         <div class="label">층간소음</div>
                         <div class="sub">저주파/충격</div>
                     </div>
+                    <div class="class-card" id="type-voice">
+                        <div class="icon">🗣️</div>
+                        <div class="label">사람 소리</div>
+                        <div class="sub">대화/고함</div>
+                    </div>
                     <div class="class-card" id="type-home">
                         <div class="icon">🏠</div>
                         <div class="label">생활소음</div>
@@ -472,7 +477,7 @@
                     housingType: housingType,
                     floorLevel: floorLevel,
                     envType: envType,
-                    createdAt: new Date().toISOString()
+                    updatedAt: Date.now() // Save timestamp for periodic check
                 };
                 
                 localStorage.setItem('user_profile', JSON.stringify(userProfile));
@@ -490,17 +495,37 @@
             alert('설정이 완료되었습니다.\n이제 [모니터링 시작] 버튼을 눌러주세요.');
         }
 
-        // Check on load (Inline)
+        // Check on load (Periodic Check: Every 7 Days)
         window.addEventListener('DOMContentLoaded', () => {
             try {
-                const profile = localStorage.getItem('user_profile');
+                const profileStr = localStorage.getItem('user_profile');
                 const modal = document.getElementById('user-info-modal');
-                if (!profile && modal) {
+                const CHECK_INTERVAL_DAYS = 7;
+                const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+                if (!modal) return;
+
+                if (!profileStr) {
+                    // No profile -> Show
                     modal.style.display = 'flex';
-                } else if (modal) {
-                    modal.style.display = 'none';
+                } else {
+                    const profile = JSON.parse(profileStr);
+                    const lastUpdate = profile.updatedAt || 0;
+                    const now = Date.now();
+
+                    if ((now - lastUpdate) > (CHECK_INTERVAL_DAYS * ONE_DAY_MS)) {
+                        // Expired -> Show again for re-verification
+                        modal.querySelector('h2').textContent = "📅 정기 환경 점검";
+                        modal.querySelector('.desc').innerHTML = "지난 설정 후 7일이 지났습니다.<br>현재 환경에 변화가 있는지 확인해주세요.";
+                        modal.style.display = 'flex';
+                    } else {
+                        // Valid -> Hide
+                        modal.style.display = 'none';
+                    }
                 }
-            } catch(e) {}
+            } catch(e) {
+                console.error(e);
+            }
         });
     </script>
 

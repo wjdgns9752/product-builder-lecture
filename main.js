@@ -54,6 +54,7 @@ const downloadLink = document.getElementById('download-recording');
 // Classifier Elements
 const classCards = {
     floor: document.getElementById('type-floor'),
+    voice: document.getElementById('type-voice'),
     home: document.getElementById('type-home'),
     road: document.getElementById('type-road'),
     train: document.getElementById('type-train'),
@@ -518,22 +519,38 @@ function analyze() {
 
   // Classifier
   if (calibratedDb > 40 && !isCalibrating) { 
-      let lowEnergy = 0, midLowEnergy = 0, midHighEnergy = 0;
-      for(let i=0; i<10; i++) lowEnergy += dataArray[i];
-      for(let i=10; i<42; i++) midLowEnergy += dataArray[i];
-      for(let i=42; i<170; i++) midHighEnergy += dataArray[i];
+      let lowEnergy = 0, midLowEnergy = 0, midHighEnergy = 0, voiceEnergy = 0;
       
-      lowEnergy /= 10; midLowEnergy /= 32; midHighEnergy /= 128;
-      const maxEnergy = Math.max(lowEnergy, midLowEnergy, midHighEnergy);
+      // Frequency Bands (Approximate for 44.1kHz / 2048 FFT)
+      // Bin size ~= 21.5 Hz
+      for(let i=0; i<8; i++) lowEnergy += dataArray[i]; // ~0-170Hz (Floor/Impact)
+      for(let i=14; i<140; i++) voiceEnergy += dataArray[i]; // ~300-3000Hz (Human Voice Range)
+      for(let i=10; i<42; i++) midLowEnergy += dataArray[i]; // ~200-900Hz (Road/Home)
+      for(let i=42; i<170; i++) midHighEnergy += dataArray[i]; // ~900-3600Hz (Air/Hiss)
       
-      Object.values(classCards).forEach(c => c.classList.remove('active'));
-      if (maxEnergy === lowEnergy) classCards.floor.classList.add('active'); 
+      lowEnergy /= 8; 
+      voiceEnergy /= 126;
+      midLowEnergy /= 32; 
+      midHighEnergy /= 128;
+
+      const maxEnergy = Math.max(lowEnergy, voiceEnergy, midLowEnergy, midHighEnergy);
+      
+      Object.values(classCards).forEach(c => { if(c) c.classList.remove('active'); });
+      
+      if (maxEnergy === lowEnergy && lowEnergy > 50) {
+          if (classCards.floor) classCards.floor.classList.add('active'); 
+      }
+      else if (maxEnergy === voiceEnergy && voiceEnergy > midLowEnergy * 1.2) {
+          // Voice needs to be distinct from general mid-noise
+          if (classCards.voice) classCards.voice.classList.add('active');
+      }
       else if (maxEnergy === midLowEnergy) {
-           if (midLowEnergy > 150) classCards.air.classList.add('active'); 
-           else classCards.road.classList.add('active');
-      } else classCards.home.classList.add('active');
+           if (midLowEnergy > 150) { if(classCards.air) classCards.air.classList.add('active'); }
+           else { if(classCards.road) classCards.road.classList.add('active'); }
+      } 
+      else { if(classCards.home) classCards.home.classList.add('active'); }
   } else {
-      Object.values(classCards).forEach(c => c.classList.remove('active'));
+      Object.values(classCards).forEach(c => { if(c) c.classList.remove('active'); });
   }
 
   // Background
@@ -587,20 +604,20 @@ function updateAnalysis() {
     const valIr = document.getElementById('val-ir');
     if (valIr) valIr.textContent = fluctuation.toFixed(1); // Using Fluctuation as simplified IR
 
-    // Dynamic Descriptions
+    // Dynamic Descriptions (Academic/Scientific Context)
     const descEvent = document.getElementById('desc-event');
     const descIr = document.getElementById('desc-ir');
     
     if (descEvent) {
-        if (eventImpact < 3) descEvent.textContent = "안정적 (무시 가능)";
-        else if (eventImpact < 8) descEvent.textContent = "약간 거슬림 (생활)";
-        else descEvent.textContent = "⚠️ 매우 불쾌함 (충격음)";
+        if (eventImpact < 3) descEvent.textContent = "Low Salience (배경 소음 우세)";
+        else if (eventImpact < 8) descEvent.textContent = "Moderate Salience (이벤트 감지됨)";
+        else descEvent.textContent = "High Acoustic Salience (강한 돌발성, Harmonica Index↑)";
     }
     
     if (descIr) {
-        if (fluctuation < 10) descIr.textContent = "지속음 (냉장고/팬)";
-        else if (fluctuation < 30) descIr.textContent = "일반적 변동";
-        else descIr.textContent = "간헐적 소음 (대화/TV)";
+        if (fluctuation < 10) descIr.textContent = "Constant (시간적 구조 안정)";
+        else if (fluctuation < 30) descIr.textContent = "Fluctuating (일반적 변동)";
+        else descIr.textContent = "High Intermittency (높은 간헐성, DYNAMAP 기준)";
     }
 
     // Harmonica 'Pencil' Visualization
