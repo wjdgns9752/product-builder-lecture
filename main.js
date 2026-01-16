@@ -2,9 +2,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getFirestore, collection, addDoc, serverTimestamp, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-// AI Imports (ESM)
-import * as tf from 'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/+esm';
-import * as yamnet from 'https://cdn.jsdelivr.net/npm/@tensorflow-models/yamnet@0.3.0/+esm';
+// AI Imports REMOVED - Using Global Scripts from HTML
+// import * as tf from ...
+// import * as yamnet from ...
 
 const firebaseConfig = {
   apiKey: "AIzaSyB80YVLtFSBs2l3TiazSRj0xsgOBeUZG4I",
