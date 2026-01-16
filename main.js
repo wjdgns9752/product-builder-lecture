@@ -296,7 +296,7 @@ if (autoCalibBtn) {
 
         // Set Flag
         isCalibrating = true;
-        statusText.textContent = "상태: 마이크 보정 중... (평가 중지)";
+        statusText.textContent = "상태: 마이크 정밀 보정 중... (3단계)";
 
         if (!audioContext || audioContext.state === 'suspended') {
             const success = await startAudio();
@@ -310,49 +310,147 @@ if (autoCalibBtn) {
         const referenceSPL = refSPL; 
 
         autoCalibBtn.disabled = true;
-        autoCalibBtn.textContent = `⏳ 측정 중... (기기: ${model})`;
         
         try {
-            if (!isPlayingNoise) playPinkNoise();
+            const iterations = 3;
+            let measuredOffsets = [];
 
-            setTimeout(() => {
+            for (let i = 1; i <= iterations; i++) {
+                autoCalibBtn.textContent = `⏳ 측정 중... (${i}/${iterations})`;
+                statusText.textContent = `상태: 측정 ${i}/${iterations} 진행 중...`;
+                
+                // 1. Play Noise
+                if (!isPlayingNoise) playPinkNoise();
+                
+                // Wait for noise to stabilize
+                await new Promise(r => setTimeout(r, 1000));
+
+                // 2. Measure
                 let sumDb = 0;
                 let samples = 0;
-                const measurementInterval = setInterval(() => {
-                    const rawDb = parseFloat(currentRawDbSpan.textContent);
-                    if (!isNaN(rawDb) && rawDb > -100) {
-                        sumDb += rawDb;
-                        samples++;
-                    }
-                }, 100);
+                const measurePromise = new Promise(resolve => {
+                    const interval = setInterval(() => {
+                        const rawDb = parseFloat(currentRawDbSpan.textContent);
+                        if (!isNaN(rawDb) && rawDb > -100) {
+                            sumDb += rawDb;
+                            samples++;
+                        }
+                    }, 100);
 
-                setTimeout(() => {
-                    clearInterval(measurementInterval);
-                    stopPinkNoise();
-                    
-                    if (samples > 5) { 
-                        const avgRawDb = sumDb / samples;
-                        dbOffset = referenceSPL - avgRawDb;
-                        localStorage.setItem('dbOffset', dbOffset);
-                        alert(`[자동 보정 완료]\n보정값: ${dbOffset.toFixed(1)} dB`);
-                        calibModal.classList.add('hidden');
-                    }
-                    
-                    // Cooldown to prevent tail noise alarm
+                    // Measure for 2 seconds
                     setTimeout(() => {
-                        autoCalibBtn.disabled = false;
-                        autoCalibBtn.textContent = "🚀 자동 보정 시작";
-                        isCalibrating = false;
-                        statusText.textContent = "상태: 감지 중...";
-                    }, 1500);
-                }, 3000); 
-            }, 1000); 
+                        clearInterval(interval);
+                        resolve(samples > 0 ? sumDb / samples : null);
+                    }, 2000);
+                });
+
+                const avgRawDb = await measurePromise;
+                
+                // 3. Stop Noise (briefly)
+                stopPinkNoise();
+                await new Promise(r => setTimeout(r, 500)); // Quiet gap
+
+                if (avgRawDb !== null) {
+                    const offset = referenceSPL - avgRawDb;
+                    measuredOffsets.push(offset);
+                    console.log(`Calibration Step ${i}: Raw=${avgRawDb.toFixed(2)}, Offset=${offset.toFixed(2)}`);
+                }
+            }
+
+            // Final Calculation
+            if (measuredOffsets.length > 0) {
+                const totalOffset = measuredOffsets.reduce((a, b) => a + b, 0);
+                dbOffset = totalOffset / measuredOffsets.length;
+                localStorage.setItem('dbOffset', dbOffset);
+                alert(`[정밀 보정 완료]\n3회 평균 보정값: ${dbOffset.toFixed(1)} dB`);
+                calibModal.classList.add('hidden');
+            } else {
+                alert("측정 오류가 발생했습니다. 다시 시도해주세요.");
+            }
+
         } catch (e) {
+            console.error(e);
+            alert("보정 중 오류 발생");
+        } finally {
+            // Reset UI
             autoCalibBtn.disabled = false;
+            autoCalibBtn.textContent = "🚀 정밀 자동 보정 시작 (3회)";
             isCalibrating = false;
+            statusText.textContent = "상태: 감지 중...";
             stopPinkNoise();
         }
     });
+}
+
+// --- Admin Mode Logic ---
+const adminBtn = document.getElementById('admin-mode-btn');
+const adminModal = document.getElementById('admin-modal');
+const adminAppDbSpan = document.getElementById('admin-app-db');
+const adminRefInput = document.getElementById('admin-ref-db');
+const adminLogBtn = document.getElementById('admin-log-btn');
+const adminLogTable = document.getElementById('admin-log-table');
+const adminMaeSpan = document.getElementById('admin-mae');
+
+let adminLogs = [];
+let isAdminModeOpen = false;
+
+if (adminBtn) {
+    adminBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        adminModal.classList.remove('hidden');
+        isAdminModeOpen = true;
+        updateAdminDisplay();
+    });
+}
+
+function updateAdminDisplay() {
+    if (!isAdminModeOpen || adminModal.classList.contains('hidden')) {
+        isAdminModeOpen = false;
+        return;
+    }
+    requestAnimationFrame(updateAdminDisplay);
+    // Update current App dB in Admin Modal
+    adminAppDbSpan.textContent = currentVolumeValue.toFixed(1);
+}
+
+if (adminLogBtn) {
+    adminLogBtn.addEventListener('click', () => {
+        const refDb = parseFloat(adminRefInput.value);
+        const appDb = parseFloat(adminAppDbSpan.textContent);
+
+        if (isNaN(refDb)) {
+            alert("소음계 측정값(숫자)을 입력해주세요.");
+            return;
+        }
+
+        const diff = appDb - refDb;
+        const logItem = {
+            id: adminLogs.length + 1,
+            app: appDb.toFixed(1),
+            ref: refDb.toFixed(1),
+            diff: diff.toFixed(1)
+        };
+        adminLogs.push(logItem);
+        renderAdminLogs();
+        adminRefInput.value = ''; // Clear input
+        adminRefInput.focus();
+    });
+}
+
+function renderAdminLogs() {
+    adminLogTable.innerHTML = adminLogs.map(log => `
+        <tr style="border-bottom: 1px solid #eee;">
+            <td style="padding:8px;">${log.id}</td>
+            <td style="padding:8px;">${log.app}</td>
+            <td style="padding:8px;">${log.ref}</td>
+            <td style="padding:8px; color:${Math.abs(log.diff) > 3 ? 'red' : 'green'}">${log.diff > 0 ? '+' : ''}${log.diff}</td>
+        </tr>
+    `).join('');
+
+    // Calculate MAE (Mean Absolute Error)
+    const totalError = adminLogs.reduce((sum, log) => sum + Math.abs(parseFloat(log.diff)), 0);
+    const mae = totalError / adminLogs.length;
+    adminMaeSpan.textContent = mae.toFixed(2);
 }
 
 // --- Audio Init Button ---
