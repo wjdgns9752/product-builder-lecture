@@ -2,6 +2,10 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getFirestore, collection, addDoc, serverTimestamp, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
+// AI Imports (ESM)
+import * as tf from 'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/+esm';
+import * as yamnet from 'https://cdn.jsdelivr.net/npm/@tensorflow-models/yamnet@0.3.0/+esm';
+
 const firebaseConfig = {
   apiKey: "AIzaSyB80YVLtFSBs2l3TiazSRj0xsgOBeUZG4I",
   authDomain: "noise-monitoring-5764d.firebaseapp.com",
@@ -192,26 +196,13 @@ async function setupAI(stream) {
     const resultText = document.getElementById('ai-result-text');
     
     try {
-        // 1. Wait for TFJS to be ready
-        let retries = 0;
-        while (typeof tf === 'undefined' && retries < 50) {
-            statusLabel.textContent = "⏳ TFJS 엔진 로딩 중...";
-            await new Promise(r => setTimeout(r, 200));
-            retries++;
-        }
-        
-        if (typeof tf === 'undefined') throw new Error("TensorFlow.js 로드 실패");
-
-        // Load Model (Try window.yamnet or global yamnet)
+        // 1. Load Model (Directly from import)
         if (!aiModel) {
             statusLabel.textContent = "⏳ AI 모델 다운로드 중...";
-            
-            // Safe access
-            const yamnetLoader = window.yamnet || (typeof yamnet !== 'undefined' ? yamnet : null);
-            
-            if (!yamnetLoader) throw new Error("YAMNet 라이브러리 없음");
-            
-            aiModel = await yamnetLoader.load();
+            // Explicitly set backend to 'webgl' or 'cpu' to avoid auto-detection issues? 
+            // Usually not needed, but good to know.
+            await tf.ready(); 
+            aiModel = await yamnet.load();
             statusLabel.textContent = "✅ AI 준비 완료 (분석 중)";
         }
         
