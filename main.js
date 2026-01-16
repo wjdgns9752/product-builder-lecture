@@ -123,15 +123,23 @@ function showOnboarding(isUpdate) {
 }
 
 // Global function for Onboarding Form
-async function saveUserInfo() {
-    if (!currentUserId) return;
+async function saveUserInfo(e) {
+    if(e) e.preventDefault();
+    
+    const btn = document.getElementById('btn-save-info');
+    if(btn) btn.textContent = "저장 중...";
+
+    if (!currentUserId) {
+        currentUserId = generateUUID();
+        localStorage.setItem('user_uid', currentUserId);
+    }
     
     const housingType = document.getElementById('housing-type').value;
     const floorLevel = document.getElementById('floor-level').value;
     const envType = document.getElementById('env-type').value;
 
     const profileData = {
-        nickname: currentUserNickname,
+        nickname: currentUserNickname || 'Guest',
         housingType,
         floorLevel,
         envType,
@@ -141,15 +149,19 @@ async function saveUserInfo() {
     try {
         await setDoc(doc(db, "users", currentUserId), profileData, { merge: true });
         userProfile = profileData;
-        userInfoModal.classList.add('hidden');
-        userInfoModal.style.display = 'none';
+        localStorage.setItem('user_profile', JSON.stringify(profileData)); // Backup
+        
         alert("정보가 저장되었습니다. 시작합니다!");
-    } catch (e) {
-        console.error("Save failed:", e);
-        // Fallback
+    } catch (err) {
+        console.error("DB Save failed, using local:", err);
+        // Fallback: Save locally and proceed
+        localStorage.setItem('user_profile', JSON.stringify(profileData));
+        userProfile = profileData;
+        alert("시작합니다! (로컬 모드)");
+    } finally {
         userInfoModal.classList.add('hidden');
         userInfoModal.style.display = 'none';
-        alert("시작합니다! (로컬 저장됨)");
+        if(btn) btn.textContent = "입력 완료 및 시작";
     }
 }
 
