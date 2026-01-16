@@ -123,8 +123,8 @@ function showOnboarding(isUpdate) {
 }
 
 // Global function for Onboarding Form
-window.saveUserInfo = async function(e) {
-    if(e) e.preventDefault();
+window.saveUserInfo = async function() {
+    // alert("저장 시작!"); // Debug
     
     const btn = document.getElementById('btn-save-info');
     if(btn) btn.textContent = "저장 중...";
