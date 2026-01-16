@@ -1,10 +1,5 @@
-// Firebase Integration
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getFirestore, collection, addDoc, serverTimestamp, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-
-// AI Imports REMOVED - Using Global Scripts from HTML
-// import * as tf from ...
-// import * as yamnet from ...
+// Firebase Integration (Global UMD)
+// Imports removed. Using 'firebase' global object.
 
 const firebaseConfig = {
   apiKey: "AIzaSyB80YVLtFSBs2l3TiazSRj0xsgOBeUZG4I",
@@ -16,8 +11,10 @@ const firebaseConfig = {
   measurementId: "G-1BCMY7SVDQ"
 };
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+// Initialize Firebase
+const app = firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const auth = firebase.auth();
 
 // DOM Elements
 const initBtn = document.getElementById('init-btn');
@@ -91,10 +88,10 @@ btnStart.addEventListener('click', (e) => {
 
 async function checkUserProfile(uid) {
     try {
-        const docRef = doc(db, "users", uid);
-        const docSnap = await getDoc(docRef);
+        const docRef = db.collection("users").doc(uid);
+        const docSnap = await docRef.get();
 
-        if (docSnap.exists()) {
+        if (docSnap.exists) {
             userProfile = docSnap.data();
             // Periodic Check (7 days)
             const lastUpdate = userProfile.updatedAt || 0;

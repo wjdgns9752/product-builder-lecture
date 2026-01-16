@@ -11,6 +11,11 @@
     
     <title>스마트 환경 소음 모니터 (층간/항공/도로/철도) | 실시간 dB 측정</title>
     
+    <!-- Firebase (Compat/UMD) -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+
     <link rel="stylesheet" href="style.css?v=14">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔊</text></svg>">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔊</text></svg>">
@@ -516,34 +521,9 @@
     <!-- Emergency Script for Onboarding -->
     <script>
         function saveUserInfo() {
-            const btn = document.getElementById('btn-save-info');
-            if(btn) btn.textContent = "저장 중...";
-
-            // 1. Get Values
-            const housing = document.getElementById('housing-type').value;
-            const floor = document.getElementById('floor-level').value;
-            const env = document.getElementById('env-type').value;
-
-            // 2. Save to LocalStorage (Reliable)
-            const profile = {
-                housingType: housing,
-                floorLevel: floor,
-                envType: env,
-                updatedAt: Date.now()
-            };
-            localStorage.setItem('user_profile', JSON.stringify(profile));
-
-            // 3. Hide Modal (Force)
-            const modal = document.getElementById('user-info-modal');
-            if(modal) {
-                modal.style.display = 'none';
-                modal.classList.add('hidden');
-            }
-
-            alert("설정이 완료되었습니다. 모니터링을 시작합니다.");
-        }
+            // ... (keep content) ...
     </script>
 
-    <script type="module" src="main.js?v=14"></script>
+    <script src="main.js?v=15"></script>
 </body>
 </html>
