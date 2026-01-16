@@ -326,6 +326,7 @@ let noiseStartTime = 0;
 const TRIGGER_DURATION_MS = 2000; 
 let lastEvalTime = 0;
 const GRACE_PERIOD_MS = 3000; 
+let audioInitTime = 0; // Warm-up timer
 
 // Background Noise Tracking (in dB)
 let backgroundLevel = 40; // Default est. dB
@@ -403,7 +404,8 @@ async function startAudio() {
     
     if (!isMonitoring) {
         isMonitoring = true;
-        statusText.textContent = "상태: 모니터링 중...";
+        audioInitTime = Date.now(); // Set warm-up start time
+        statusText.textContent = "상태: 안정화 중..."; // Update status
         analyze();
         drawSpectrogram();
     }
@@ -910,6 +912,15 @@ function updateUI(current, bg) {
 }
 
 function checkThreshold(current, bg) {
+  // 0. Warm-up Period (Ignore first 3 seconds)
+  if (Date.now() - audioInitTime < 3000) {
+      statusText.textContent = "상태: 마이크 안정화 중...";
+      backgroundLevel = current; // Instantly adapt background
+      durationBar.style.width = '0%';
+      noiseStartTime = 0;
+      return;
+  }
+
   if (isCalibrating) {
       statusText.textContent = "상태: 마이크 보정 중... (평가 일시중지)";
       durationBar.style.width = '0%';
