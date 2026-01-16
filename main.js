@@ -103,6 +103,11 @@ let backgroundLevel = 40; // Default est. dB
 const adaptationRate = 0.005; 
 const decayRate = 0.05;      
 
+// --- Advanced Analysis Variables ---
+const dbBuffer = []; // Stores recent dB values for stats (L90, Leq)
+const BUFFER_SIZE = 300; // Approx 30 seconds (assuming 100ms push)
+let lastAnalysisTime = 0;
+
 // Visualizer State
 let tempCanvas = document.createElement('canvas');
 let tempCtx = tempCanvas.getContext('2d');
@@ -359,10 +364,36 @@ if (autoCalibBtn) {
 
             // Final Calculation
             if (measuredOffsets.length > 0) {
+                // 1. Calculate Average
                 const totalOffset = measuredOffsets.reduce((a, b) => a + b, 0);
-                dbOffset = totalOffset / measuredOffsets.length;
+                const finalOffset = totalOffset / measuredOffsets.length;
+
+                // 2. Calculate Standard Deviation (Stability Check)
+                const variance = measuredOffsets.reduce((sum, val) => sum + Math.pow(val - finalOffset, 2), 0) / measuredOffsets.length;
+                const stdDev = Math.sqrt(variance);
+
+                // 3. Determine Precision Grade
+                let grade = '';
+                let gradeDesc = '';
+                
+                if (stdDev < 1.0) {
+                    grade = 'S (최우수)';
+                    gradeDesc = '아주 완벽해요! 전문 장비 수준의 안정성입니다.';
+                } else if (stdDev < 2.5) {
+                    grade = 'A (우수)';
+                    gradeDesc = '안정적입니다. 일상 모니터링에 충분해요.';
+                } else if (stdDev < 5.0) {
+                    grade = 'B (보통)';
+                    gradeDesc = '약간의 편차가 있어요. 주변이 시끄러웠나요?';
+                } else {
+                    grade = 'F (불안정)';
+                    gradeDesc = '측정값이 튑니다. 더 조용한 곳에서 다시 해보세요.';
+                }
+
+                dbOffset = finalOffset;
                 localStorage.setItem('dbOffset', dbOffset);
-                alert(`[정밀 보정 완료]\n3회 평균 보정값: ${dbOffset.toFixed(1)} dB`);
+                
+                alert(`[정밀 보정 완료]\n\n🏆 마이크/환경 등급: ${grade}\n📊 안정성(편차): ±${stdDev.toFixed(2)}dB\n✅ 최종 보정값: ${dbOffset.toFixed(1)} dB\n\n💡 ${gradeDesc}`);
                 calibModal.classList.add('hidden');
             } else {
                 alert("측정 오류가 발생했습니다. 다시 시도해주세요.");
@@ -507,8 +538,85 @@ function analyze() {
       backgroundLevel = Math.max(10, backgroundLevel * (1 - decayRate) + calibratedDb * decayRate);
   } else backgroundLevel = backgroundLevel * (1 - adaptationRate) + calibratedDb * adaptationRate;
   
+  // Push to Buffer for Advanced Analysis
+  dbBuffer.push(calibratedDb);
+  if (dbBuffer.length > BUFFER_SIZE) dbBuffer.shift();
+
+  // Run Advanced Analysis every 500ms
+  const now = Date.now();
+  if (now - lastAnalysisTime > 500) {
+      updateAnalysis();
+      lastAnalysisTime = now;
+  }
+
   updateUI(calibratedDb, backgroundLevel);
   checkThreshold(calibratedDb, backgroundLevel);
+}
+
+// --- Advanced Analysis Function ---
+function updateAnalysis() {
+    if (dbBuffer.length < 50) return; // Need at least 5 seconds of data
+
+    // 1. Calculate Statistics (Sorted for Percentiles)
+    const sortedDb = [...dbBuffer].sort((a, b) => a - b);
+    const L90 = sortedDb[Math.floor(sortedDb.length * 0.1)]; // Background (Quiet 10%)
+    const L10 = sortedDb[Math.floor(sortedDb.length * 0.9)]; // Peak (Noisy 10%)
+    
+    // Calculate Leq (Logarithmic Average)
+    let sumEnergy = 0;
+    for (let db of dbBuffer) {
+        sumEnergy += Math.pow(10, db / 10);
+    }
+    const Leq = 10 * Math.log10(sumEnergy / dbBuffer.length);
+
+    // 2. Metrics for Harmonica & Event Index
+    const eventImpact = Math.max(0, Leq - L90); // Component of noise due to events
+    const fluctuation = L10 - L90; // Intermittency Proxy
+    const intrusivenessRatio = (eventImpact / Math.max(1, Leq)) * 100; // % of total noise that is 'event'
+
+    // 3. Update UI Elements
+    const valL90 = document.getElementById('val-l90');
+    if (valL90) valL90.textContent = L90.toFixed(1);
+    
+    const valEvent = document.getElementById('val-event');
+    if (valEvent) valEvent.textContent = eventImpact.toFixed(1);
+    
+    const valIr = document.getElementById('val-ir');
+    if (valIr) valIr.textContent = fluctuation.toFixed(1); // Using Fluctuation as simplified IR
+
+    // Harmonica Bar Visualization
+    const baseBar = document.getElementById('harmonica-base');
+    const eventBar = document.getElementById('harmonica-event');
+    
+    if (baseBar && eventBar) {
+        // Normalize to 0-100 range roughly (assuming max 100dB)
+        const baseWidth = Math.min(100, L90);
+        const eventWidth = Math.min(100 - baseWidth, eventImpact);
+        
+        baseBar.style.width = `${baseWidth}%`;
+        eventBar.style.width = `${eventWidth}%`;
+    }
+    
+    // 4. Generate Comment (Contextual Analysis)
+    const badge = document.getElementById('noise-badge');
+    const comment = document.getElementById('analysis-comment');
+    
+    if (badge && comment) {
+        // Logic based on HARMONICA/DYNAMAP concepts
+        if (fluctuation < 5) {
+            badge.textContent = "Steady (지속음)";
+            badge.className = "badge steady";
+            comment.textContent = "변동이 적은 지속적인 소음입니다. (예: 냉장고, 멀리서 들리는 도로 소음)";
+        } else if (eventImpact > 10) {
+            badge.textContent = "Impulsive (충격음)";
+            badge.className = "badge impulsive";
+            comment.textContent = `배경 소음보다 ${eventImpact.toFixed(0)}dB 높은 돌발 소음이 감지됩니다. 불쾌감이 클 수 있습니다. (예: 발소리, 물건 낙하)`;
+        } else {
+            badge.textContent = "Intermittent (간헐적)";
+            badge.className = "badge intermittent";
+            comment.textContent = "불규칙한 소음 변화가 감지됩니다. (예: 대화 소리, 가까운 TV 소리)";
+        }
+    }
 }
 
 function updateUI(current, bg) {

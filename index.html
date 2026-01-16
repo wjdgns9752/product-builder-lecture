@@ -88,6 +88,52 @@
                 </div>
             </div>
 
+            <!-- Advanced Analysis Dashboard (Harmonica & Event) -->
+            <div class="analysis-dashboard">
+                <h3>📊 소음 성향 정밀 분석 (Harmonica & Event)</h3>
+                
+                <div class="harmonica-visual">
+                    <div class="harmonica-bar-container">
+                        <!-- Background Component (L90) -->
+                        <div id="harmonica-base" class="h-bar base">
+                            <span class="h-label">배경(L90)</span>
+                        </div>
+                        <!-- Event Component (Leq - L90) -->
+                        <div id="harmonica-event" class="h-bar event">
+                            <span class="h-label">돌발(Event)</span>
+                        </div>
+                    </div>
+                    <div class="harmonica-scale">
+                        <span>30dB</span>
+                        <span>60dB</span>
+                        <span>90dB</span>
+                    </div>
+                </div>
+
+                <div class="metrics-grid">
+                    <div class="metric-box">
+                        <span class="m-label">배경 소음도 (L90)</span>
+                        <span class="m-value" id="val-l90">-</span>
+                        <span class="m-unit">dB</span>
+                    </div>
+                    <div class="metric-box highlight">
+                        <span class="m-label">돌발 영향력 (Intrusiveness)</span>
+                        <span class="m-value" id="val-event">-</span>
+                        <span class="m-unit">dB</span>
+                    </div>
+                    <div class="metric-box">
+                        <span class="m-label">변동성 (Fluctuation)</span>
+                        <span class="m-value" id="val-ir">-</span>
+                        <span class="m-unit">%</span>
+                    </div>
+                </div>
+
+                <div class="analysis-comment-box">
+                    <span id="noise-badge" class="badge">분석 중...</span>
+                    <p id="analysis-comment">최근 30초 간의 소음 패턴을 분석하고 있습니다.</p>
+                </div>
+            </div>
+
             <div class="controls">
                 <button id="init-btn" class="primary-btn">모니터링 시작</button>
                 <button id="record-btn" class="record-btn hidden">🔴 녹음 시작</button>
