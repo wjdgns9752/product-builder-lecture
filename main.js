@@ -184,16 +184,19 @@ const classCards = {
 
 // --- Load YAMNet Model ---
 async function loadModel() {
+    const debugEl = document.getElementById('ai-debug-info');
     try {
         console.log("Loading YAMNet...");
-        statusText.textContent = "상태: AI 모델 다운로드 중...";
+        if(debugEl) debugEl.textContent = "AI 모델 다운로드 중... (잠시만 기다려주세요)";
+        
         yamnetModel = await yamnet.load();
+        
         console.log("YAMNet Loaded Successfully!");
-        statusText.textContent = "상태: AI 모델 로드 완료. 준비됨.";
+        if(debugEl) debugEl.textContent = "AI 모델 준비 완료! 소리를 내보세요.";
     } catch (e) {
         console.error("Model load failed", e);
-        statusText.textContent = "상태: AI 모델 로드 실패! (네트워크 확인)";
-        alert("AI 모델을 불러오지 못했습니다. 페이지를 새로고침 해보세요.");
+        if(debugEl) debugEl.textContent = "⚠️ AI 모델 로드 실패 (새로고침 필요)";
+        alert("AI 모델을 불러오지 못했습니다. 네트워크 상태를 확인하고 새로고침 해주세요.");
     }
 }
 
@@ -201,10 +204,14 @@ async function loadModel() {
 
 // --- YAMNet Classification Logic ---
 async function processAudioForAI(inputData, inputSampleRate) {
-    if (!yamnetModel || isCalibrating) return;
+    // Show 'Processing' indicator
+    const debugEl = document.getElementById('ai-debug-info');
+    if (!yamnetModel) {
+        if(debugEl && debugEl.textContent.includes('준비')) debugEl.textContent = "AI 모델 대기 중...";
+        return;
+    }
     
-    // Debug: Check if data is flowing
-    // console.log("Processing Audio for AI...", inputData.length); 
+    // ... rest of the function 
 
     // ... (Resampling Logic) ...
     // ...
