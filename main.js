@@ -183,57 +183,79 @@ const classCards = {
 // ...
 
 // --- Independent AI Module (YAMNet) ---
-let aiContext = null;
-let aiModel = null;
-let aiStreamSource = null;
 let aiProcessor = null;
+let aiModel = null;
 
 async function setupAI(stream) {
-    if (aiContext) return; // Already running
-    
     const statusLabel = document.getElementById('ai-loader');
     const meterFill = document.getElementById('ai-meter-fill');
     const resultText = document.getElementById('ai-result-text');
     
     try {
         // 1. Load Model
-        statusLabel.textContent = "⏳ AI 모델 로딩 중...";
-        aiModel = await yamnet.load();
-        statusLabel.textContent = "✅ AI 준비 완료 (분석 중)";
+        if (!aiModel) {
+            statusLabel.textContent = "⏳ AI 모델 로딩 중...";
+            aiModel = await yamnet.load();
+            statusLabel.textContent = "✅ AI 준비 완료 (분석 중)";
+        }
         
-        // 2. Setup Audio for AI (16kHz requirement)
-        aiContext = new AudioContext({ sampleRate: 16000 }); // Try to force 16k
-        const micInput = aiContext.createMediaStreamSource(stream);
+        // 2. Hook into existing AudioContext (Best for compatibility)
+        if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
         
-        // Use ScriptProcessor for raw data access (BufferSize 4096)
-        aiProcessor = aiContext.createScriptProcessor(4096, 1, 1);
+        const micInput = audioContext.createMediaStreamSource(stream);
+        
+        // Use ScriptProcessor (bufferSize 4096) for resampling
+        // This runs on the main thread but is widely supported
+        if (aiProcessor) aiProcessor.disconnect();
+        aiProcessor = audioContext.createScriptProcessor(4096, 1, 1);
         
         micInput.connect(aiProcessor);
-        aiProcessor.connect(aiContext.destination);
+        aiProcessor.connect(audioContext.destination); // Needed for processing to happen
+        
+        // Circular Buffer for Resampling
+        const targetRate = 16000;
+        let buffer16k = [];
         
         aiProcessor.onaudioprocess = async (e) => {
             const inputData = e.inputBuffer.getChannelData(0);
+            const originalRate = e.inputBuffer.sampleRate;
             
-            // Visual feedback (Meter)
+            // Visual feedback (RMS Meter)
             let sum = 0;
-            for(let i=0; i<inputData.length; i++) sum += inputData[i]*inputData[i];
-            const rms = Math.sqrt(sum / inputData.length);
-            meterFill.style.width = `${Math.min(100, rms * 500)}%`; // Simple visual
+            for(let i=0; i<inputData.length; i+=10) sum += inputData[i]*inputData[i];
+            const rms = Math.sqrt(sum / (inputData.length/10));
+            if(meterFill) meterFill.style.width = `${Math.min(100, rms * 800)}%`;
             
-            // Only predict if sound is audible
-            if (rms > 0.02) { 
-                const results = await aiModel.predict(inputData);
-                const top = findTopClass(results[0]);
-                updateAIUI(top, resultText);
-                results[0].dispose(); // Cleanup
-            } else {
-                updateAIUI({ label: 'Silence', score: 0 }, resultText);
+            // 3. Resample & Accumulate
+            // Simple Decimation (Skip samples)
+            const step = originalRate / targetRate;
+            for (let i = 0; i < inputData.length; i += step) {
+                buffer16k.push(inputData[Math.floor(i)]);
+            }
+            
+            // 4. Predict when buffer is full (16000 samples = 1 sec)
+            if (buffer16k.length >= 16000) {
+                const chunk = new Float32Array(buffer16k.slice(0, 16000));
+                
+                // Sliding window: Remove old data (keep 50% overlap for smoothness)
+                // Remove first 8000 samples
+                buffer16k = buffer16k.slice(8000); 
+                
+                // Only predict if audible sound exists
+                if (rms > 0.01) { 
+                    const results = await aiModel.predict(chunk);
+                    const top = findTopClass(results[0]);
+                    updateAIUI(top, resultText);
+                    results[0].dispose(); // Clean Tensor
+                } else {
+                    updateAIUI({ label: 'Silence', score: 0 }, resultText);
+                }
             }
         };
         
     } catch (e) {
         console.error("AI Setup Error:", e);
-        statusLabel.textContent = "⚠️ AI 초기화 실패 (브라우저 호환성)";
+        statusLabel.textContent = "⚠️ AI 오류: " + e.message;
     }
 }
 
@@ -253,6 +275,8 @@ function updateAIUI(prediction, resultEl) {
         home: document.getElementById('card-home'),
         floor: document.getElementById('card-floor'),
         road: document.getElementById('card-road'),
+        train: document.getElementById('card-train'),
+        air: document.getElementById('card-air'),
         none: document.getElementById('card-none')
     };
     
@@ -265,16 +289,16 @@ function updateAIUI(prediction, resultEl) {
     if (resultEl) resultEl.textContent = `${prediction.label} (${(score*100).toFixed(0)}%)`;
 
     // Logic
-    if (label.includes('silence') || score < 0.3) {
+    if (label.includes('silence') || score < 0.25) {
         if(cards.none) cards.none.classList.add('active');
         return;
     }
 
-    // 1. Home / Internal (Priority)
-    if (label.includes('speech') || label.includes('music') || label.includes('typing') || 
-        label.includes('domestic') || label.includes('tool') || label.includes('interior') ||
+    // 1. Home / Internal
+    if (label.includes('speech') || label.includes('music') || label.includes('domestic') || 
         label.includes('cooking') || label.includes('water') || label.includes('vacuum') ||
-        label.includes('cleaning') || label.includes('wash') || label.includes('conversation')) {
+        label.includes('cleaning') || label.includes('wash') || label.includes('conversation') ||
+        label.includes('typing') || label.includes('mouse') || label.includes('click')) {
         if(cards.home) cards.home.classList.add('active');
         return;
     }
@@ -286,10 +310,23 @@ function updateAIUI(prediction, resultEl) {
         return;
     }
 
-    // 3. External (Road/Air/Train)
-    if (label.includes('traffic') || label.includes('vehicle') || label.includes('siren') || 
-        label.includes('aircraft') || label.includes('train') || label.includes('outside') || label.includes('street')) {
+    // 3. Road
+    if (label.includes('traffic') || label.includes('vehicle') || label.includes('car') || 
+        label.includes('bus') || label.includes('truck') || label.includes('motor') || 
+        label.includes('engine') || label.includes('street') || label.includes('siren')) {
         if(cards.road) cards.road.classList.add('active');
+        return;
+    }
+
+    // 4. Train
+    if (label.includes('train') || label.includes('rail') || label.includes('subway') || label.includes('tram')) {
+        if(cards.train) cards.train.classList.add('active');
+        return;
+    }
+
+    // 5. Air
+    if (label.includes('aircraft') || label.includes('airplane') || label.includes('jet') || label.includes('helicopter')) {
+        if(cards.air) cards.air.classList.add('active');
         return;
     }
     
