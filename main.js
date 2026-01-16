@@ -192,10 +192,20 @@ async function setupAI(stream) {
     const resultText = document.getElementById('ai-result-text');
     
     try {
-        // 1. Load Model
+        // 1. Wait for Global YAMNet to be ready
+        let retries = 0;
+        while (!window.yamnet && retries < 50) {
+            statusLabel.textContent = "⏳ AI 라이브러리 로딩 중...";
+            await new Promise(r => setTimeout(r, 200));
+            retries++;
+        }
+        
+        if (!window.yamnet) throw new Error("YAMNet 라이브러리를 로드할 수 없습니다.");
+
+        // Load Model
         if (!aiModel) {
-            statusLabel.textContent = "⏳ AI 모델 로딩 중...";
-            aiModel = await yamnet.load();
+            statusLabel.textContent = "⏳ AI 모델 다운로드 중...";
+            aiModel = await window.yamnet.load();
             statusLabel.textContent = "✅ AI 준비 완료 (분석 중)";
         }
         
