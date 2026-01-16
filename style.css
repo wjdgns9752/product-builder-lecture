@@ -269,6 +269,76 @@ body.dark-mode .m-value { color: #eee; }
 body.dark-mode .analysis-comment-box { background-color: #2c2c2c; }
 body.dark-mode #analysis-comment { color: #ccc; }
 
+/* Enhanced Info Section Styles (SEO & AdSense) */
+.info-section {
+    max-width: 800px;
+    margin: 0 auto;
+    text-align: left;
+    line-height: 1.7;
+    color: var(--text-color);
+}
+
+.content-block h2 {
+    font-size: 1.4rem;
+    color: var(--primary-color);
+    border-bottom: 2px solid #eee;
+    padding-bottom: 10px;
+    margin-top: 30px;
+}
+
+.content-block h3 {
+    font-size: 1.2rem;
+    color: #444;
+    margin-top: 25px;
+    margin-bottom: 15px;
+}
+
+body.dark-mode .content-block h3 { color: #ccc; }
+
+.content-block p {
+    margin-bottom: 15px;
+    word-break: keep-all;
+}
+
+.text-list {
+    padding-left: 20px;
+    margin-bottom: 20px;
+}
+
+.text-list li {
+    margin-bottom: 10px;
+}
+
+.standard-detail {
+    background: rgba(0,0,0,0.02);
+    border-left: 4px solid var(--primary-color);
+    padding: 15px;
+    margin-bottom: 15px;
+    border-radius: 0 8px 8px 0;
+}
+
+.standard-detail h4 {
+    margin: 0 0 8px 0;
+    color: var(--primary-color);
+}
+
+.faq-list dt {
+    font-weight: bold;
+    font-size: 1.05rem;
+    margin-top: 20px;
+    color: var(--primary-color);
+}
+
+.faq-list dd {
+    margin-left: 0;
+    margin-top: 5px;
+    padding-left: 15px;
+    border-left: 2px solid #ddd;
+    color: #555;
+}
+
+body.dark-mode .faq-list dd { color: #bbb; border-color: #444; }
+
 .status-panel {
     margin: 1.5rem 0;
     padding: 1rem;
