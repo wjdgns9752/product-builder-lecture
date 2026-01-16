@@ -122,8 +122,8 @@ function showOnboarding(isUpdate) {
     }
 }
 
-// Global function for Onboarding Form (Called from HTML button)
-window.saveUserInfo = async function() {
+// Global function for Onboarding Form
+async function saveUserInfo() {
     if (!currentUserId) return;
     
     const housingType = document.getElementById('housing-type').value;
@@ -143,15 +143,17 @@ window.saveUserInfo = async function() {
         userProfile = profileData;
         userInfoModal.classList.add('hidden');
         userInfoModal.style.display = 'none';
-        alert("시작합니다!");
+        alert("정보가 저장되었습니다. 시작합니다!");
     } catch (e) {
         console.error("Save failed:", e);
-        // Fallback for offline or permission issues
+        // Fallback
         userInfoModal.classList.add('hidden');
         userInfoModal.style.display = 'none';
         alert("시작합니다! (로컬 저장됨)");
     }
-};
+}
+
+document.getElementById('btn-save-info')?.addEventListener('click', saveUserInfo);
 
 // Init Check
 checkAuth();
