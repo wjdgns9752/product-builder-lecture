@@ -174,12 +174,120 @@ const downloadLink = document.getElementById('download-recording');
 // Classifier Elements
 const classCards = {
     floor: document.getElementById('type-floor'),
-    voice: document.getElementById('type-voice'),
     home: document.getElementById('type-home'),
     road: document.getElementById('type-road'),
     train: document.getElementById('type-train'),
     air: document.getElementById('type-air')
 };
+
+// ...
+
+// --- Load YAMNet Model ---
+async function loadModel() {
+    try {
+        console.log("Loading YAMNet...");
+        statusText.textContent = "상태: AI 모델 다운로드 중...";
+        yamnetModel = await yamnet.load();
+        console.log("YAMNet Loaded Successfully!");
+        statusText.textContent = "상태: AI 모델 로드 완료. 준비됨.";
+    } catch (e) {
+        console.error("Model load failed", e);
+        statusText.textContent = "상태: AI 모델 로드 실패! (네트워크 확인)";
+        alert("AI 모델을 불러오지 못했습니다. 페이지를 새로고침 해보세요.");
+    }
+}
+
+// ...
+
+// --- YAMNet Classification Logic ---
+async function processAudioForAI(inputData, inputSampleRate) {
+    if (!yamnetModel || isCalibrating) return;
+    
+    // Debug: Check if data is flowing
+    // console.log("Processing Audio for AI...", inputData.length); 
+
+    // ... (Resampling Logic) ...
+    // ...
+}
+
+function updateClassifierUI(prediction) {
+    const debugEl = document.getElementById('ai-debug-info');
+    if (!prediction) return;
+
+    if (debugEl) {
+        // Translate label for better UX
+        let displayLabel = prediction.label;
+        if (displayLabel.includes('Speech')) displayLabel = "사람 소리";
+        else if (displayLabel.includes('Silence')) displayLabel = "조용함";
+        
+        debugEl.textContent = `AI 분석: ${displayLabel} (${(prediction.score * 100).toFixed(0)}%)`;
+    }
+
+    const label = prediction.label.toLowerCase();
+    const score = prediction.score;
+
+    if (label.includes('silence') || label.includes('static') || label.includes('white noise')) {
+        Object.values(classCards).forEach(c => { if(c) c.classList.remove('active'); });
+        return;
+    }
+
+    Object.values(classCards).forEach(c => { if(c) c.classList.remove('active'); });
+
+    // 1. Voice (Speech) -> NOW MAPS TO HOME (Internal Noise)
+    if (score > 0.2 && (
+        label.includes('speech') || label.includes('talk') || label.includes('voice') || label.includes('conversation') || 
+        label.includes('narration') || label.includes('shout') || label.includes('yell') || label.includes('whisper') || 
+        label.includes('singing') || label.includes('laughter') || label.includes('cry') || label.includes('cough') || 
+        label.includes('breathing') || label.includes('babble') || label.includes('human')
+    )) {
+        if(classCards.home) {
+            classCards.home.classList.add('active');
+            classCards.home.querySelector('.sub').textContent = "사람/대화 소리";
+        }
+        return; 
+    }
+
+    // 2. Floor (Impact)
+    if (score > 0.3 && (
+        label.includes('knock') || label.includes('thump') || label.includes('footsteps') || label.includes('tap') || 
+        label.includes('slam') || label.includes('door') || label.includes('wood') || label.includes('walk') || label.includes('run')
+    )) {
+        if(classCards.floor) classCards.floor.classList.add('active');
+        return;
+    }
+
+    // 3. Road
+    if (score > 0.5 && (
+        label.includes('traffic') || label.includes('vehicle') || label.includes('car') || label.includes('bus') || 
+        label.includes('truck') || label.includes('motor') || label.includes('engine') || label.includes('tire') || label.includes('horn')
+    )) {
+        if(classCards.road) classCards.road.classList.add('active');
+        return;
+    }
+
+    // 4. Train
+    if (score > 0.5 && (label.includes('train') || label.includes('rail') || label.includes('subway'))) {
+        if(classCards.train) classCards.train.classList.add('active');
+        return;
+    }
+
+    // 5. Air
+    if (score > 0.6 && (label.includes('aircraft') || label.includes('airplane') || label.includes('jet'))) {
+        if(classCards.air) classCards.air.classList.add('active');
+        return;
+    }
+
+    // 6. Home (General) - Fallback
+    if (score > 0.3 && (
+        label.includes('music') || label.includes('tv') || label.includes('television') || label.includes('cooking') || 
+        label.includes('water') || label.includes('vacuum') || label.includes('keyboard') || label.includes('mouse')
+    )) {
+        if(classCards.home) {
+            classCards.home.classList.add('active');
+            classCards.home.querySelector('.sub').textContent = "가전/생활 소음";
+        }
+    }
+}
 
 // Survey Elements
 const chipGroups = {
