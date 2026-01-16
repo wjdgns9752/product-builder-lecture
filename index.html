@@ -23,6 +23,10 @@
     <header>
         <div class="header-container">
             <div class="logo">🔊 Environmental Noise Monitor</div>
+            <div id="user-status-container" style="font-size: 0.9rem;">
+                <span id="user-email" style="margin-right: 10px;">Guest</span>
+                <button id="auth-btn" class="secondary-btn" style="padding: 4px 10px; font-size: 0.8rem;">로그인</button>
+            </div>
         </div>
     </header>
 
@@ -418,6 +422,27 @@
         </div>
     </div>
 
+    <!-- Auth Modal -->
+    <div id="auth-modal" class="modal hidden" style="z-index: 2000;">
+        <div class="modal-content" style="max-width: 400px;">
+            <h2>🔐 로그인 / 회원가입</h2>
+            <p class="desc">나만의 소음 데이터를 관리하려면<br>로그인이 필요합니다.</p>
+            
+            <form id="auth-form" style="margin-top: 20px;">
+                <div class="input-group" style="flex-direction: column; align-items: stretch; gap: 10px;">
+                    <input type="email" id="auth-email" placeholder="이메일 (example@email.com)" required style="width: 100%; padding: 12px;">
+                    <input type="password" id="auth-password" placeholder="비밀번호 (6자리 이상)" required style="width: 100%; padding: 12px;">
+                </div>
+                <p id="auth-error" style="color: #f44336; font-size: 0.9rem; margin: 10px 0; display: none;"></p>
+                
+                <div class="btn-group" style="flex-direction: column; gap: 10px; margin-top: 20px;">
+                    <button type="submit" id="btn-login" class="primary-btn" style="width: 100%;">로그인</button>
+                    <button type="button" id="btn-signup" class="secondary-btn" style="width: 100%;">새 계정 만들기 (회원가입)</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Onboarding Modal (User Info) -->
     <div id="user-info-modal" class="modal">
         <div class="modal-content">
@@ -462,72 +487,6 @@
             <p class="algo-note" style="margin-top:15px">입력된 정보는 통계 분석용으로만 사용되며,<br>익명으로 안전하게 처리됩니다.</p>
         </div>
     </div>
-
-    <script>
-        // Global Onboarding Handler (Inline for safety)
-        function saveUserInfo() {
-            console.log("Saving user info (Inline)...");
-            
-            try {
-                const housingType = document.getElementById('housing-type').value;
-                const floorLevel = document.getElementById('floor-level').value;
-                const envType = document.getElementById('env-type').value;
-
-                const userProfile = {
-                    housingType: housingType,
-                    floorLevel: floorLevel,
-                    envType: envType,
-                    updatedAt: Date.now() // Save timestamp for periodic check
-                };
-                
-                localStorage.setItem('user_profile', JSON.stringify(userProfile));
-            } catch (e) {
-                console.error("Storage error:", e);
-            }
-
-            // Force Hide Modal
-            const modal = document.getElementById('user-info-modal');
-            if (modal) {
-                modal.style.display = 'none';
-                modal.classList.add('hidden');
-            }
-            
-            alert('설정이 완료되었습니다.\n이제 [모니터링 시작] 버튼을 눌러주세요.');
-        }
-
-        // Check on load (Periodic Check: Every 7 Days)
-        window.addEventListener('DOMContentLoaded', () => {
-            try {
-                const profileStr = localStorage.getItem('user_profile');
-                const modal = document.getElementById('user-info-modal');
-                const CHECK_INTERVAL_DAYS = 7;
-                const ONE_DAY_MS = 24 * 60 * 60 * 1000;
-
-                if (!modal) return;
-
-                if (!profileStr) {
-                    // No profile -> Show
-                    modal.style.display = 'flex';
-                } else {
-                    const profile = JSON.parse(profileStr);
-                    const lastUpdate = profile.updatedAt || 0;
-                    const now = Date.now();
-
-                    if ((now - lastUpdate) > (CHECK_INTERVAL_DAYS * ONE_DAY_MS)) {
-                        // Expired -> Show again for re-verification
-                        modal.querySelector('h2').textContent = "📅 정기 환경 점검";
-                        modal.querySelector('.desc').innerHTML = "지난 설정 후 7일이 지났습니다.<br>현재 환경에 변화가 있는지 확인해주세요.";
-                        modal.style.display = 'flex';
-                    } else {
-                        // Valid -> Hide
-                        modal.style.display = 'none';
-                    }
-                }
-            } catch(e) {
-                console.error(e);
-            }
-        });
-    </script>
 
     <!-- Permission Guide Modal -->
     <div id="permission-modal" class="modal hidden" style="z-index: 2000;">
