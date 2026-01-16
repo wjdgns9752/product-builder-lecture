@@ -182,145 +182,122 @@ const classCards = {
 
 // ...
 
-// --- Load YAMNet Model ---
-async function loadModel() {
-    const debugEl = document.getElementById('ai-debug-info');
+// --- Independent AI Module (YAMNet) ---
+let aiContext = null;
+let aiModel = null;
+let aiStreamSource = null;
+let aiProcessor = null;
+
+async function setupAI(stream) {
+    if (aiContext) return; // Already running
+    
+    const statusLabel = document.getElementById('ai-loader');
+    const meterFill = document.getElementById('ai-meter-fill');
+    const resultText = document.getElementById('ai-result-text');
+    
     try {
-        console.log("Loading YAMNet...");
-        if(debugEl) debugEl.textContent = "AI 모델 다운로드 중... (잠시만 기다려주세요)";
+        // 1. Load Model
+        statusLabel.textContent = "⏳ AI 모델 로딩 중...";
+        aiModel = await yamnet.load();
+        statusLabel.textContent = "✅ AI 준비 완료 (분석 중)";
         
-        yamnetModel = await yamnet.load();
+        // 2. Setup Audio for AI (16kHz requirement)
+        aiContext = new AudioContext({ sampleRate: 16000 }); // Try to force 16k
+        const micInput = aiContext.createMediaStreamSource(stream);
         
-        console.log("YAMNet Loaded Successfully!");
-        if(debugEl) debugEl.textContent = "AI 모델 준비 완료! 소리를 내보세요.";
+        // Use ScriptProcessor for raw data access (BufferSize 4096)
+        aiProcessor = aiContext.createScriptProcessor(4096, 1, 1);
+        
+        micInput.connect(aiProcessor);
+        aiProcessor.connect(aiContext.destination);
+        
+        aiProcessor.onaudioprocess = async (e) => {
+            const inputData = e.inputBuffer.getChannelData(0);
+            
+            // Visual feedback (Meter)
+            let sum = 0;
+            for(let i=0; i<inputData.length; i++) sum += inputData[i]*inputData[i];
+            const rms = Math.sqrt(sum / inputData.length);
+            meterFill.style.width = `${Math.min(100, rms * 500)}%`; // Simple visual
+            
+            // Only predict if sound is audible
+            if (rms > 0.02) { 
+                const results = await aiModel.predict(inputData);
+                const top = findTopClass(results[0]);
+                updateAIUI(top, resultText);
+                results[0].dispose(); // Cleanup
+            } else {
+                updateAIUI({ label: 'Silence', score: 0 }, resultText);
+            }
+        };
+        
     } catch (e) {
-        console.error("Model load failed", e);
-        if(debugEl) debugEl.textContent = "⚠️ AI 모델 로드 실패 (새로고침 필요)";
-        alert("AI 모델을 불러오지 못했습니다. 네트워크 상태를 확인하고 새로고침 해주세요.");
+        console.error("AI Setup Error:", e);
+        statusLabel.textContent = "⚠️ AI 초기화 실패 (브라우저 호환성)";
     }
 }
 
-// ...
-
-// --- YAMNet Classification Logic ---
-async function processAudioForAI(inputData, inputSampleRate) {
-    const debugEl = document.getElementById('ai-debug-info');
-    
-    // Visual Feedback for Buffer Progress
-    if (debugEl && Math.random() < 0.1) { // Throttle updates
-        debugEl.textContent = `AI 데이터 수집 중... (${audioBuffer16k.length} / 16000)`;
-        debugEl.style.color = '#ff9800'; // Orange while buffering
+function findTopClass(scores) {
+    const values = scores.dataSync();
+    const classMap = aiModel.classMap;
+    let max = -1;
+    let index = -1;
+    for(let i=0; i<values.length; i++) {
+        if(values[i] > max) { max = values[i]; index = i; }
     }
-
-    if (!yamnetModel) {
-        if(debugEl) debugEl.textContent = "AI 모델 로딩 대기 중...";
-        return;
-    }
-
-    // 1. Simple Resampling (Decimation) to 16kHz
-    const targetRate = 16000;
-    const step = inputSampleRate / targetRate;
-    
-    for (let i = 0; i < inputData.length; i += step) {
-        const idx = Math.floor(i);
-        if (idx < inputData.length) {
-            audioBuffer16k.push(inputData[idx]);
-        }
-    }
-
-    // 2. Predict when buffer full (~1 second)
-    if (audioBuffer16k.length >= 16000) {
-        const chunk = new Float32Array(audioBuffer16k.slice(0, 16000));
-        
-        // Sliding window
-        audioBuffer16k = audioBuffer16k.slice(8000); 
-        
-        if (debugEl) {
-            debugEl.textContent = "AI 분석 중... (추론 시작)";
-            debugEl.style.color = '#4caf50'; // Green when predicting
-        }
-        await runYamnet(chunk);
-    }
+    return { label: classMap[index], score: max };
 }
 
-function updateClassifierUI(prediction) {
-    const debugEl = document.getElementById('ai-debug-info');
-    if (!prediction) return;
-
-    if (debugEl) {
-        // Translate label for better UX
-        let displayLabel = prediction.label;
-        if (displayLabel.includes('Speech')) displayLabel = "사람 소리";
-        else if (displayLabel.includes('Silence')) displayLabel = "조용함";
-        
-        debugEl.textContent = `AI 분석: ${displayLabel} (${(prediction.score * 100).toFixed(0)}%)`;
-    }
-
+function updateAIUI(prediction, resultEl) {
+    const cards = {
+        home: document.getElementById('card-home'),
+        floor: document.getElementById('card-floor'),
+        road: document.getElementById('card-road'),
+        none: document.getElementById('card-none')
+    };
+    
+    // Reset
+    Object.values(cards).forEach(c => c && c.classList.remove('active'));
+    
     const label = prediction.label.toLowerCase();
     const score = prediction.score;
+    
+    if (resultEl) resultEl.textContent = `${prediction.label} (${(score*100).toFixed(0)}%)`;
 
-    if (label.includes('silence') || label.includes('static') || label.includes('white noise')) {
-        Object.values(classCards).forEach(c => { if(c) c.classList.remove('active'); });
+    // Logic
+    if (label.includes('silence') || score < 0.3) {
+        if(cards.none) cards.none.classList.add('active');
         return;
     }
 
-    Object.values(classCards).forEach(c => { if(c) c.classList.remove('active'); });
-
-    // 1. Voice (Speech) -> NOW MAPS TO HOME (Internal Noise)
-    if (score > 0.2 && (
-        label.includes('speech') || label.includes('talk') || label.includes('voice') || label.includes('conversation') || 
-        label.includes('narration') || label.includes('shout') || label.includes('yell') || label.includes('whisper') || 
-        label.includes('singing') || label.includes('laughter') || label.includes('cry') || label.includes('cough') || 
-        label.includes('breathing') || label.includes('babble') || label.includes('human')
-    )) {
-        if(classCards.home) {
-            classCards.home.classList.add('active');
-            classCards.home.querySelector('.sub').textContent = "사람/대화 소리";
-        }
-        return; 
-    }
-
-    // 2. Floor (Impact)
-    if (score > 0.3 && (
-        label.includes('knock') || label.includes('thump') || label.includes('footsteps') || label.includes('tap') || 
-        label.includes('slam') || label.includes('door') || label.includes('wood') || label.includes('walk') || label.includes('run')
-    )) {
-        if(classCards.floor) classCards.floor.classList.add('active');
+    // 1. Home / Internal (Priority)
+    if (label.includes('speech') || label.includes('music') || label.includes('typing') || 
+        label.includes('domestic') || label.includes('tool') || label.includes('interior') ||
+        label.includes('cooking') || label.includes('water') || label.includes('vacuum') ||
+        label.includes('cleaning') || label.includes('wash') || label.includes('conversation')) {
+        if(cards.home) cards.home.classList.add('active');
         return;
     }
 
-    // 3. Road
-    if (score > 0.5 && (
-        label.includes('traffic') || label.includes('vehicle') || label.includes('car') || label.includes('bus') || 
-        label.includes('truck') || label.includes('motor') || label.includes('engine') || label.includes('tire') || label.includes('horn')
-    )) {
-        if(classCards.road) classCards.road.classList.add('active');
+    // 2. Floor / Impact
+    if (label.includes('thump') || label.includes('knock') || label.includes('footsteps') || 
+        label.includes('impact') || label.includes('door') || label.includes('wood') || label.includes('tap')) {
+        if(cards.floor) cards.floor.classList.add('active');
         return;
     }
 
-    // 4. Train
-    if (score > 0.5 && (label.includes('train') || label.includes('rail') || label.includes('subway'))) {
-        if(classCards.train) classCards.train.classList.add('active');
+    // 3. External (Road/Air/Train)
+    if (label.includes('traffic') || label.includes('vehicle') || label.includes('siren') || 
+        label.includes('aircraft') || label.includes('train') || label.includes('outside') || label.includes('street')) {
+        if(cards.road) cards.road.classList.add('active');
         return;
     }
-
-    // 5. Air
-    if (score > 0.6 && (label.includes('aircraft') || label.includes('airplane') || label.includes('jet'))) {
-        if(classCards.air) classCards.air.classList.add('active');
-        return;
-    }
-
-    // 6. Home (General) - Fallback
-    if (score > 0.3 && (
-        label.includes('music') || label.includes('tv') || label.includes('television') || label.includes('cooking') || 
-        label.includes('water') || label.includes('vacuum') || label.includes('keyboard') || label.includes('mouse')
-    )) {
-        if(classCards.home) {
-            classCards.home.classList.add('active');
-            classCards.home.querySelector('.sub').textContent = "가전/생활 소음";
-        }
-    }
+    
+    // Fallback -> Home
+    if(cards.home) cards.home.classList.add('active');
 }
+
+// ... rest of the code ...
 
 // Survey Elements
 const chipGroups = {
@@ -430,6 +407,9 @@ async function startAudio() {
         analyser.smoothingTimeConstant = 0.6; 
         
         microphone.connect(analyser);
+        
+        // Start AI Module independently
+        setupAI(stream);
     }
 
     initBtn.style.display = 'none';
