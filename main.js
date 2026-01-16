@@ -206,13 +206,18 @@ async function loadModel() {
 async function processAudioForAI(inputData, inputSampleRate) {
     const debugEl = document.getElementById('ai-debug-info');
     
+    // Visual Feedback for Buffer Progress
+    if (debugEl && Math.random() < 0.1) { // Throttle updates
+        debugEl.textContent = `AI 데이터 수집 중... (${audioBuffer16k.length} / 16000)`;
+        debugEl.style.color = '#ff9800'; // Orange while buffering
+    }
+
     if (!yamnetModel) {
-        if(debugEl && !debugEl.textContent.includes('실패')) debugEl.textContent = "AI 모델 로딩 대기 중...";
+        if(debugEl) debugEl.textContent = "AI 모델 로딩 대기 중...";
         return;
     }
 
     // 1. Simple Resampling (Decimation) to 16kHz
-    // YAMNet needs 16000Hz. Input is usually 44100 or 48000.
     const targetRate = 16000;
     const step = inputSampleRate / targetRate;
     
@@ -223,21 +228,17 @@ async function processAudioForAI(inputData, inputSampleRate) {
         }
     }
 
-    // Update Debug UI (Throttle visual updates to save performance)
-    if (debugEl && Math.random() < 0.1) {
-        debugEl.textContent = `AI 데이터 수집 중... (${audioBuffer16k.length} / 16000)`;
-    }
-
     // 2. Predict when buffer full (~1 second)
     if (audioBuffer16k.length >= 16000) {
-        // Extract chunk
         const chunk = new Float32Array(audioBuffer16k.slice(0, 16000));
         
-        // Sliding window: keep last 0.5s (8000 samples) for overlap
-        // This ensures continuous prediction
+        // Sliding window
         audioBuffer16k = audioBuffer16k.slice(8000); 
         
-        if (debugEl) debugEl.textContent = "AI 분석 중... (추론 시작)";
+        if (debugEl) {
+            debugEl.textContent = "AI 분석 중... (추론 시작)";
+            debugEl.style.color = '#4caf50'; // Green when predicting
+        }
         await runYamnet(chunk);
     }
 }
