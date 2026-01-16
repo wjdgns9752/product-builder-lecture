@@ -123,7 +123,7 @@ function showOnboarding(isUpdate) {
 }
 
 // Global function for Onboarding Form
-async function saveUserInfo(e) {
+window.saveUserInfo = async function(e) {
     if(e) e.preventDefault();
     
     const btn = document.getElementById('btn-save-info');
@@ -163,7 +163,7 @@ async function saveUserInfo(e) {
         userInfoModal.style.display = 'none';
         if(btn) btn.textContent = "입력 완료 및 시작";
     }
-}
+};
 
 document.getElementById('btn-save-info')?.addEventListener('click', saveUserInfo);
 
