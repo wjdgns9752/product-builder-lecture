@@ -159,34 +159,46 @@ const classCards = {
 let aiProcessor = null;
 let aiModel = null;
 
+// Helper to load scripts dynamically
+function loadScript(url) {
+    return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = url;
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.appendChild(script);
+    });
+}
+
+// --- Independent AI Module (YAMNet) ---
+let aiProcessor = null;
+let aiModel = null;
+
 async function setupAI(stream) {
     const statusLabel = document.getElementById('ai-loader');
     const meterFill = document.getElementById('ai-meter-fill');
     const resultText = document.getElementById('ai-result-text');
     
-    // 0. Wait for Library (Polling)
-    let retries = 0;
-    while (typeof window.yamnet === 'undefined' && retries < 60) { // Wait up to 30 sec
-        if (statusLabel) statusLabel.textContent = `⏳ AI 라이브러리 로딩 중... (${retries})`;
-        await new Promise(r => setTimeout(r, 500));
-        retries++;
-    }
-
-    if (typeof window.yamnet === 'undefined') {
-        if (statusLabel) statusLabel.textContent = "⚠️ AI 로드 실패 (새로고침 권장)";
-        return;
-    }
-
     try {
-        // 1. Load Model
+        // 1. Load Scripts Dynamically if not present
+        if (typeof tf === 'undefined') {
+            statusLabel.textContent = "⏳ TFJS 다운로드 중...";
+            await loadScript('https://unpkg.com/@tensorflow/tfjs@3.13.0/dist/tf.min.js');
+        }
+        
+        if (typeof yamnet === 'undefined') {
+            statusLabel.textContent = "⏳ YAMNet 다운로드 중...";
+            await loadScript('https://unpkg.com/@tensorflow-models/yamnet@0.0.1/dist/yamnet.min.js');
+        }
+
+        // 2. Load Model
         if (!aiModel) {
-            statusLabel.textContent = "⏳ AI 모델 다운로드 중...";
-            await tf.ready(); // Ensure TF is ready
-            aiModel = await window.yamnet.load();
+            statusLabel.textContent = "⏳ AI 모델 초기화 중...";
+            aiModel = await yamnet.load();
             statusLabel.textContent = "✅ AI 준비 완료 (분석 중)";
         }
         
-        // ... (Audio Setup) ...
+        // 3. Hook into existing AudioContext (Best for compatibility)
         if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
         
         const micInput = audioContext.createMediaStreamSource(stream);
