@@ -119,6 +119,37 @@ function showOnboarding(isUpdate) {
     }
 }
 
+function saveUserInfo() {
+    const housingType = document.getElementById('housing-type').value;
+    const floorLevel = document.getElementById('floor-level').value;
+    const envType = document.getElementById('env-type').value;
+
+    const profile = {
+        housingType,
+        floorLevel,
+        envType,
+        updatedAt: Date.now()
+    };
+
+    // Save to localStorage
+    localStorage.setItem('user_profile', JSON.stringify(profile));
+    
+    // Save to Firestore
+    if (currentUserId) {
+        db.collection("users").doc(currentUserId).set(profile, { merge: true })
+            .then(() => {
+                console.log("User profile saved to Firestore.");
+            })
+            .catch((error) => {
+                console.error("Error saving user profile: ", error);
+            });
+    }
+
+    // Hide modal
+    userInfoModal.classList.add('hidden');
+    userInfoModal.style.display = 'none';
+}
+
 // Init Check
 checkAuth();
 
