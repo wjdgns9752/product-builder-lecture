@@ -201,132 +201,137 @@ const classCards = {
 
 // ...
 
-// --- Independent AI Module (Speech Commands) ---
-let aiProcessor = null;
-let aiModel = null;
+// --- Lightweight Internal Sound Classifier (Heuristic) ---
+// 외부 AI 모델 대신 주파수 특성(FFT)을 분석하여 소음원을 추정하는 자체 엔진입니다.
+// 네트워크 오류 없이 즉시 동작하며 매우 가볍습니다.
 
-// Helper to load scripts dynamically
-function loadScript(url) {
-    return new Promise((resolve, reject) => {
-        const script = document.createElement('script');
-        script.src = url;
-        script.onload = resolve;
-        script.onerror = () => reject(new Error(`Script load failed: ${url}`));
-        document.head.appendChild(script);
-    });
-}
+let noiseHistory = []; // 최근 패턴 분석용
 
-async function setupAI(stream) {
-    const statusLabel = document.getElementById('ai-loader');
-    const meterFill = document.getElementById('ai-meter-fill');
-    const resultText = document.getElementById('ai-result-text');
+function analyzeNoiseCharacteristics(dataArray, bufferLength) {
+    // 1. Calculate Band Energies
+    let lowEnergy = 0;   // ~0-200Hz (Impact, Thud)
+    let midLowEnergy = 0; // ~200-1000Hz (Car, Voice base)
+    let midHighEnergy = 0; // ~1000-4000Hz (Voice, Siren, Construction)
+    let highEnergy = 0;   // ~4000Hz+ (Hiss, Air, Metal)
+
+    // FFT Size 2048 -> Bin size ~21.5 Hz
+    // Indexes:
+    // 0-9: 0~193Hz (Low)
+    // 10-46: 215~989Hz (MidLow)
+    // 47-186: 1010~3999Hz (MidHigh)
+    // 187-1023: 4000Hz+ (High)
+
+    for(let i=0; i<bufferLength; i++) {
+        const val = dataArray[i];
+        if (i < 10) lowEnergy += val;
+        else if (i < 47) midLowEnergy += val;
+        else if (i < 187) midHighEnergy += val;
+        else highEnergy += val;
+    }
+
+    // Normalize by bin count
+    lowEnergy /= 10;
+    midLowEnergy /= 37;
+    midHighEnergy /= 140;
+    highEnergy /= (bufferLength - 187);
+
+    // 2. Identify Dominant Source
+    let result = { label: 'none', score: 0 };
+    const maxVal = Math.max(lowEnergy, midLowEnergy, midHighEnergy, highEnergy);
     
-    try {
-        // 1. Load Scripts Dynamically if not present
-        if (typeof tf === 'undefined') {
-            statusLabel.textContent = "⏳ TFJS 다운로드 중...";
-            await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.13.0/dist/tf.min.js');
-        }
-        
-        if (typeof speechCommands === 'undefined') {
-            statusLabel.textContent = "⏳ Speech Commands 다운로드 중...";
-            await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow-models/speech-commands@0.4.0/dist/speech-commands.min.js');
-        }
-        
-        // Double check
-        if (typeof speechCommands === 'undefined') {
-             throw new Error("Speech Commands library could not be loaded.");
-        }
-
-        // 2. Load Model
-        if (!aiModel) {
-            statusLabel.textContent = "⏳ AI 모델 초기화 중...";
-            // Create the recognizer
-            aiModel = speechCommands.create('BROWSER_FFT');
-            await aiModel.ensureModelLoaded();
-            statusLabel.textContent = "✅ AI 준비 완료 (분석 중)";
-        }
-        
-        // 3. Start Listening
-        // Speech Commands has its own internal audio handling
-        if (aiModel.isListening()) {
-            await aiModel.stopListening();
-        }
-
-        aiModel.listen(result => {
-             // Visual feedback (Fake RMS from scores for UI consistency)
-             const scores = result.scores;
-             const maxScore = Math.max(...scores);
-             if(meterFill) meterFill.style.width = `${Math.min(100, maxScore * 100)}%`;
-
-             const top = findTopClass(scores, aiModel.wordLabels());
-             updateAIUI(top, resultText);
-        }, {
-            includeSpectrogram: false, // We don't need it
-            probabilityThreshold: 0.75,
-            invokeCallbackOnNoiseAndUnknown: true,
-            overlapFactor: 0.50 
-        });
-        
-    } catch (e) {
-        console.error("AI Setup Error:", e);
-        statusLabel.textContent = "⚠️ AI 오류: " + e.message;
+    // Threshold to ignore silence
+    if (maxVal < 30) {
+        return { label: 'none', score: 0 };
     }
+
+    // Heuristic Rules
+    if (lowEnergy > midLowEnergy * 1.3 && lowEnergy > 50) {
+        // 강한 저음 -> 층간소음 (발망치), 둥둥거리는 음악
+        result = { label: 'Floor Impact', score: lowEnergy / 255 };
+    } 
+    else if (midHighEnergy > lowEnergy * 1.5 && midHighEnergy > 50) {
+        // 날카로운 소리 -> 항공기(제트음), 금속음, 사이렌
+        result = { label: 'Aircraft/Siren', score: midHighEnergy / 255 };
+    } 
+    else if (midLowEnergy > 50 && midLowEnergy > highEnergy) {
+        // 중저음 웅웅거림 -> 도로교통, 일반 생활 소음
+        if (Math.abs(midLowEnergy - midHighEnergy) < 20) {
+            // 평탄한 소음 -> 도로/지하철
+            result = { label: 'Road Traffic', score: midLowEnergy / 255 };
+        } else {
+            // 변화가 있는 중음 -> 생활 소음 (목소리 등)
+            result = { label: 'Household', score: midLowEnergy / 255 };
+        }
+    }
+    else {
+        result = { label: 'Household', score: maxVal / 255 };
+    }
+
+    return result;
 }
 
-function findTopClass(scores, labels) {
-    // scores is a Float32Array
-    let max = -1;
-    let index = -1;
-    for(let i=0; i<scores.length; i++) {
-        if(scores[i] > max) { max = scores[i]; index = i; }
-    }
-    return { label: labels[index], score: max };
-}
+function updateInternalClassifierUI(analysis) {
+    const resultText = document.getElementById('ai-result-text');
+    const meterFill = document.getElementById('ai-meter-fill');
 
-function updateAIUI(prediction, resultEl) {
+    // Update Meter
+    if (meterFill) {
+        meterFill.style.width = `${Math.min(100, analysis.score * 100)}%`;
+    }
+
+    // Cards
     const cards = {
-        home: document.getElementById('card-home'), // Background Noise
-        floor: document.getElementById('card-floor'), // Unknown (often impacts)
-        road: document.getElementById('card-road'), // Not perfectly mapped
-        train: document.getElementById('card-train'), // Not perfectly mapped
-        air: document.getElementById('card-air'), // Not perfectly mapped
+        home: document.getElementById('card-home'),
+        floor: document.getElementById('card-floor'),
+        road: document.getElementById('card-road'),
+        train: document.getElementById('card-train'), // merged with road logic for simplicity
+        air: document.getElementById('card-air'),
         none: document.getElementById('card-none')
     };
     
-    // Reset
     Object.values(cards).forEach(c => c && c.classList.remove('active'));
-    
-    const label = prediction.label.toLowerCase();
-    const score = prediction.score;
-    
-    if (resultEl) resultEl.textContent = `${prediction.label} (${(score*100).toFixed(0)}%)`;
 
-    // Map Speech Commands classes to our UI
-    // Classes: 'background_noise', 'unknown', 'down', 'eight', 'five', 'four', 'go', 'left', 'nine', 'no', 'one', 'right', 'seven', 'six', 'stop', 'three', 'two', 'up', 'yes', 'zero'
-    
-    if (label === 'background_noise') {
-         if(cards.home) cards.home.classList.add('active'); // Treat as ambient home noise
-         return;
+    // Text Update
+    let displayLabel = "대기 중";
+
+    switch(analysis.label) {
+        case 'Floor Impact':
+            if(cards.floor) cards.floor.classList.add('active');
+            displayLabel = "층간소음 (저주파)";
+            break;
+        case 'Aircraft/Siren':
+            if(cards.air) cards.air.classList.add('active');
+            displayLabel = "항공기/금속음";
+            break;
+        case 'Road Traffic':
+            if(cards.road) cards.road.classList.add('active');
+            displayLabel = "도로/지하철";
+            break;
+        case 'Household':
+            if(cards.home) cards.home.classList.add('active');
+            displayLabel = "생활 소음";
+            break;
+        default:
+            if(cards.none) cards.none.classList.add('active');
+            break;
     }
 
-    if (label === 'unknown') {
-         // Unknown often catches non-speech impulsive sounds
-         if(cards.floor) cards.floor.classList.add('active'); 
-         return;
+    if (resultText) {
+        resultText.textContent = analysis.label === 'none' ? '소음 감지 대기 중' : `${displayLabel} 감지됨`;
     }
-    
-    // Since this is a speech model, actual speech words will map to 'Human Voice' or similar
-    // We can map specific words to categories if we wanted, but generally speech = home/voice
-    if (['yes', 'no', 'up', 'down', 'left', 'right', 'on', 'off', 'stop', 'go'].includes(label) || !isNaN(parseInt(label))) {
-         // It's speech
-         if(cards.home) cards.home.classList.add('active');
-         return;
-    }
-
-    // Fallback
-    if(cards.none) cards.none.classList.add('active');
 }
+
+async function setupAI(stream) {
+    // 기존 AI setup 대체: 단순히 UI 초기화만 수행
+    const statusLabel = document.getElementById('ai-loader');
+    if(statusLabel) statusLabel.textContent = "✅ 자체 분석 엔진 가동 (Lightweight)";
+    
+    // 분석은 main loop의 analyze() 에서 호출됨
+    return true;
+}
+
+// (Legacy functions removed/replaced)
+
 
 // ... rest of the code ...
 
@@ -793,38 +798,11 @@ function analyze() {
 
   // Classifier
   if (calibratedDb > 40 && !isCalibrating) { 
-      let lowEnergy = 0, midLowEnergy = 0, midHighEnergy = 0, voiceEnergy = 0;
-      
-      // Frequency Bands (Approximate for 44.1kHz / 2048 FFT)
-      // Bin size ~= 21.5 Hz
-      for(let i=0; i<8; i++) lowEnergy += dataArray[i]; // ~0-170Hz (Floor/Impact)
-      for(let i=14; i<140; i++) voiceEnergy += dataArray[i]; // ~300-3000Hz (Human Voice Range)
-      for(let i=10; i<42; i++) midLowEnergy += dataArray[i]; // ~200-900Hz (Road/Home)
-      for(let i=42; i<170; i++) midHighEnergy += dataArray[i]; // ~900-3600Hz (Air/Hiss)
-      
-      lowEnergy /= 8; 
-      voiceEnergy /= 126;
-      midLowEnergy /= 32; 
-      midHighEnergy /= 128;
-
-      const maxEnergy = Math.max(lowEnergy, voiceEnergy, midLowEnergy, midHighEnergy);
-      
-      Object.values(classCards).forEach(c => { if(c) c.classList.remove('active'); });
-      
-      if (maxEnergy === lowEnergy && lowEnergy > 50) {
-          if (classCards.floor) classCards.floor.classList.add('active'); 
-      }
-      else if (maxEnergy === voiceEnergy && voiceEnergy > midLowEnergy * 1.2) {
-          // Voice needs to be distinct from general mid-noise
-          if (classCards.voice) classCards.voice.classList.add('active');
-      }
-      else if (maxEnergy === midLowEnergy) {
-           if (midLowEnergy > 150) { if(classCards.air) classCards.air.classList.add('active'); }
-           else { if(classCards.road) classCards.road.classList.add('active'); }
-      } 
-      else { if(classCards.home) classCards.home.classList.add('active'); }
+      // Use the new Heuristic Engine
+      const analysisResult = analyzeNoiseCharacteristics(dataArray, bufferLength);
+      updateInternalClassifierUI(analysisResult);
   } else {
-      Object.values(classCards).forEach(c => { if(c) c.classList.remove('active'); });
+      updateInternalClassifierUI({ label: 'none', score: 0 });
   }
 
   // Background
