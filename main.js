@@ -201,70 +201,88 @@ const classCards = {
 
 // ...
 
-// --- Lightweight Internal Sound Classifier (Heuristic) ---
-// 외부 AI 모델 대신 주파수 특성(FFT)을 분석하여 소음원을 추정하는 자체 엔진입니다.
-// 네트워크 오류 없이 즉시 동작하며 매우 가볍습니다.
+// --- Time-Frequency Analysis Engine (Spectro-Temporal) ---
+// 단순 주파수(FFT)뿐만 아니라 시간의 흐름(Time)에 따른 변화율(Flux)과 
+// 무게중심(Centroid)을 분석하여 소음원을 정밀 분류합니다.
 
-let noiseHistory = []; // 최근 패턴 분석용
+const HISTORY_SIZE = 50; // 약 1~1.5초 분량의 데이터 저장 (Frame Buffer)
+let spectralHistory = []; 
 
 function analyzeNoiseCharacteristics(dataArray, bufferLength) {
-    // 1. Calculate Band Energies
-    let lowEnergy = 0;   // ~0-200Hz (Impact, Thud)
-    let midLowEnergy = 0; // ~200-1000Hz (Car, Voice base)
-    let midHighEnergy = 0; // ~1000-4000Hz (Voice, Siren, Construction)
-    let highEnergy = 0;   // ~4000Hz+ (Hiss, Air, Metal)
-
-    // FFT Size 2048 -> Bin size ~21.5 Hz
-    // Indexes:
-    // 0-9: 0~193Hz (Low)
-    // 10-46: 215~989Hz (MidLow)
-    // 47-186: 1010~3999Hz (MidHigh)
-    // 187-1023: 4000Hz+ (High)
+    // 1. Current Frame Feature Extraction
+    let sumEnergy = 0;
+    let weightedSum = 0;
+    
+    // Low/High Band Split for heuristic checks
+    let lowBandEnergy = 0;   // ~0-200Hz
+    let highBandEnergy = 0;  // ~2000Hz+
 
     for(let i=0; i<bufferLength; i++) {
         const val = dataArray[i];
-        if (i < 10) lowEnergy += val;
-        else if (i < 47) midLowEnergy += val;
-        else if (i < 187) midHighEnergy += val;
-        else highEnergy += val;
+        sumEnergy += val;
+        weightedSum += i * val;
+        
+        if (i < 10) lowBandEnergy += val;
+        else if (i > 93) highBandEnergy += val;
     }
 
-    // Normalize by bin count
-    lowEnergy /= 10;
-    midLowEnergy /= 37;
-    midHighEnergy /= 140;
-    highEnergy /= (bufferLength - 187);
+    const energy = sumEnergy / bufferLength;
+    const centroid = sumEnergy > 0 ? weightedSum / sumEnergy : 0; // Spectral Centroid (Frequency Center)
 
-    // 2. Identify Dominant Source
-    let result = { label: 'none', score: 0 };
-    const maxVal = Math.max(lowEnergy, midLowEnergy, midHighEnergy, highEnergy);
+    // 2. Update History (Time Domain)
+    spectralHistory.push({ energy, centroid, lowBandEnergy, highBandEnergy });
+    if (spectralHistory.length > HISTORY_SIZE) spectralHistory.shift();
+
+    // Need enough history to analyze time patterns
+    if (spectralHistory.length < 10) return { label: 'none', score: 0 };
+
+    // 3. Time-Series Analysis (Calculations)
+    // 3.1 Spectral Flux (How much the sound changes over time)
+    let flux = 0;
+    for(let i=1; i<spectralHistory.length; i++) {
+        flux += Math.abs(spectralHistory[i].energy - spectralHistory[i-1].energy);
+    }
+    flux /= spectralHistory.length; // Average change rate
+
+    // 3.2 Max Energy in History (To detect peaks)
+    const maxHistEnergy = Math.max(...spectralHistory.map(h => h.energy));
     
-    // Threshold to ignore silence
-    if (maxVal < 30) {
+    // Threshold Check
+    if (maxHistEnergy < 10) {
         return { label: 'none', score: 0 };
     }
 
-    // Heuristic Rules
-    if (lowEnergy > midLowEnergy * 1.3 && lowEnergy > 50) {
-        // 강한 저음 -> 층간소음 (발망치), 둥둥거리는 음악
-        result = { label: 'Floor Impact', score: lowEnergy / 255 };
-    } 
-    else if (midHighEnergy > lowEnergy * 1.5 && midHighEnergy > 50) {
-        // 날카로운 소리 -> 항공기(제트음), 금속음, 사이렌
-        result = { label: 'Aircraft/Siren', score: midHighEnergy / 255 };
-    } 
-    else if (midLowEnergy > 50 && midLowEnergy > highEnergy) {
-        // 중저음 웅웅거림 -> 도로교통, 일반 생활 소음
-        if (Math.abs(midLowEnergy - midHighEnergy) < 20) {
-            // 평탄한 소음 -> 도로/지하철
-            result = { label: 'Road Traffic', score: midLowEnergy / 255 };
+    // 4. Classification Logic (Time-Frequency Rules)
+    let result = { label: 'Household', score: maxHistEnergy / 255 };
+
+    // Rule A: Impact Sounds (층간소음 - 발망치)
+    // - Time: Sudden spike (High Flux), Short duration
+    // - Freq: Low Centroid (Deep sound)
+    const isHighFlux = flux > 2.0; 
+    const isLowFreq = centroid < 25; // Index-based (approx < 500Hz)
+    
+    if (isHighFlux && isLowFreq && spectralHistory[spectralHistory.length-1].lowBandEnergy > 200) {
+        return { label: 'Floor Impact', score: Math.min(1, flux / 5) };
+    }
+
+    // Rule B: Stationary Sounds (지속음 - 도로/항공)
+    // - Time: Low Flux (Steady sound)
+    // - Freq: Differentiates Road vs Air
+    if (!isHighFlux && maxHistEnergy > 20) {
+        if (centroid < 40) {
+            // Low-Mid steady -> Road Traffic
+            return { label: 'Road Traffic', score: Math.min(1, maxHistEnergy / 100) };
         } else {
-            // 변화가 있는 중음 -> 생활 소음 (목소리 등)
-            result = { label: 'Household', score: midLowEnergy / 255 };
+            // High steady -> Aircraft or Hiss
+            return { label: 'Aircraft/Siren', score: Math.min(1, maxHistEnergy / 100) };
         }
     }
-    else {
-        result = { label: 'Household', score: maxVal / 255 };
+
+    // Rule C: Fluctuating Sounds (생활소음 - 대화/TV)
+    // - Time: Moderate Flux (Varies naturally)
+    // - Freq: Mid range
+    if (flux > 0.5) {
+         return { label: 'Household', score: Math.min(1, flux / 3) };
     }
 
     return result;
