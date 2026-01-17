@@ -211,7 +211,7 @@ function loadScript(url) {
         const script = document.createElement('script');
         script.src = url;
         script.onload = resolve;
-        script.onerror = reject;
+        script.onerror = () => reject(new Error(`Script load failed: ${url}`));
         document.head.appendChild(script);
     });
 }
@@ -231,6 +231,11 @@ async function setupAI(stream) {
         if (typeof yamnet === 'undefined') {
             statusLabel.textContent = "⏳ YAMNet 다운로드 중...";
             await loadScript('https://unpkg.com/@tensorflow-models/yamnet@0.0.1/dist/yamnet.min.js');
+        }
+        
+        // Double check
+        if (typeof yamnet === 'undefined') {
+             throw new Error("YAMNet library could not be loaded.");
         }
 
         // 2. Load Model
