@@ -225,12 +225,12 @@ async function setupAI(stream) {
         // 1. Load Scripts Dynamically if not present
         if (typeof tf === 'undefined') {
             statusLabel.textContent = "⏳ TFJS 다운로드 중...";
-            await loadScript('https://unpkg.com/@tensorflow/tfjs@3.13.0/dist/tf.min.js');
+            await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.13.0/dist/tf.min.js');
         }
         
         if (typeof yamnet === 'undefined') {
             statusLabel.textContent = "⏳ YAMNet 다운로드 중...";
-            await loadScript('https://unpkg.com/@tensorflow-models/yamnet@0.0.1/dist/yamnet.min.js');
+            await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow-models/yamnet@0.0.1/dist/yamnet.min.js');
         }
         
         // Double check
