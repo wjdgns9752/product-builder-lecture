@@ -201,91 +201,102 @@ const classCards = {
 
 // ...
 
-// --- Time-Frequency Analysis Engine (Spectro-Temporal) ---
-// 단순 주파수(FFT)뿐만 아니라 시간의 흐름(Time)에 따른 변화율(Flux)과 
-// 무게중심(Centroid)을 분석하여 소음원을 정밀 분류합니다.
+// --- 1/1 Octave Band Analysis & Classification ---
+// 1/1 옥타브 밴드(31.5Hz ~ 1kHz)를 기준으로 정밀 분석 및 시각화를 수행합니다.
 
-const HISTORY_SIZE = 50; // 약 1~1.5초 분량의 데이터 저장 (Frame Buffer)
+const OCTAVE_BANDS = [31.5, 63, 125, 250, 500, 1000];
+let currentOctaveLevels = {}; // 시각화 공유용 데이터
+
+function calculateOctaveLevels(dataArray, bufferLength, sampleRate) {
+    const nyquist = sampleRate / 2;
+    const binSize = sampleRate / (bufferLength * 2); // FFT Size = bufferLength * 2
+    
+    let levels = {};
+
+    OCTAVE_BANDS.forEach(centerFreq => {
+        // 1/1 Octave Band Limits: Lower = fc / sqrt(2), Upper = fc * sqrt(2)
+        const lowerFreq = centerFreq / 1.414;
+        const upperFreq = centerFreq * 1.414;
+        
+        let startBin = Math.floor(lowerFreq / binSize);
+        let endBin = Math.floor(upperFreq / binSize);
+        
+        // Bounds Check
+        if (startBin < 0) startBin = 0;
+        if (endBin >= bufferLength) endBin = bufferLength - 1;
+        if (startBin > endBin) startBin = endBin;
+
+        let sum = 0;
+        for (let i = startBin; i <= endBin; i++) {
+            sum += dataArray[i];
+        }
+        
+        // Average Level per Band (0-255)
+        const count = (endBin - startBin + 1);
+        levels[centerFreq] = count > 0 ? sum / count : 0;
+    });
+
+    return levels;
+}
+
+// History for Temporal Analysis
+const HISTORY_SIZE = 50;
 let spectralHistory = []; 
 
 function analyzeNoiseCharacteristics(dataArray, bufferLength) {
-    // 1. Current Frame Feature Extraction
-    let sumEnergy = 0;
-    let weightedSum = 0;
+    // 1. Calculate Octave Bands
+    const sampleRate = audioContext ? audioContext.sampleRate : 44100;
+    const bands = calculateOctaveLevels(dataArray, bufferLength, sampleRate);
+    currentOctaveLevels = bands; // Update for Visualizer
+
+    // 2. Feature Extraction from Octaves
+    // Low Frequency (Floor Impact): 31.5 + 63 Hz
+    const lowEnergy = (bands[31.5] + bands[63]) / 2;
     
-    // Low/High Band Split for heuristic checks
-    let lowBandEnergy = 0;   // ~0-200Hz
-    let highBandEnergy = 0;  // ~2000Hz+
+    // Mid-Low (Traffic/Machine): 63 + 125 + 250 Hz
+    const midLowEnergy = (bands[63] + bands[125] + bands[250]) / 3;
+    
+    // Mid-High (Voice/Household): 500 + 1000 Hz
+    const midHighEnergy = (bands[500] + bands[1000]) / 2;
 
-    for(let i=0; i<bufferLength; i++) {
-        const val = dataArray[i];
-        sumEnergy += val;
-        weightedSum += i * val;
-        
-        if (i < 10) lowBandEnergy += val;
-        else if (i > 93) highBandEnergy += val;
-    }
+    const totalEnergy = (lowEnergy + midLowEnergy + midHighEnergy) / 3;
 
-    const energy = sumEnergy / bufferLength;
-    const centroid = sumEnergy > 0 ? weightedSum / sumEnergy : 0; // Spectral Centroid (Frequency Center)
-
-    // 2. Update History (Time Domain)
-    spectralHistory.push({ energy, centroid, lowBandEnergy, highBandEnergy });
+    // 3. Temporal Flux (Changes over time)
+    spectralHistory.push({ low: lowEnergy, mid: midLowEnergy, high: midHighEnergy, total: totalEnergy });
     if (spectralHistory.length > HISTORY_SIZE) spectralHistory.shift();
+    
+    if (spectralHistory.length < 5) return { label: 'none', score: 0 };
 
-    // Need enough history to analyze time patterns
-    if (spectralHistory.length < 10) return { label: 'none', score: 0 };
-
-    // 3. Time-Series Analysis (Calculations)
-    // 3.1 Spectral Flux (How much the sound changes over time)
     let flux = 0;
     for(let i=1; i<spectralHistory.length; i++) {
-        flux += Math.abs(spectralHistory[i].energy - spectralHistory[i-1].energy);
+        flux += Math.abs(spectralHistory[i].total - spectralHistory[i-1].total);
     }
-    flux /= spectralHistory.length; // Average change rate
+    flux /= spectralHistory.length;
 
-    // 3.2 Max Energy in History (To detect peaks)
-    const maxHistEnergy = Math.max(...spectralHistory.map(h => h.energy));
+    // 4. Classification Rules (Octave Based)
     
-    // Threshold Check
-    if (maxHistEnergy < 10) {
-        return { label: 'none', score: 0 };
+    // Threshold for Silence
+    if (totalEnergy < 15) return { label: 'none', score: 0 };
+
+    // Rule A: Floor Impact (Strong Low Freq + High Flux)
+    // 31.5Hz/63Hz dominant, short duration
+    if (lowEnergy > midLowEnergy * 1.2 && lowEnergy > midHighEnergy * 1.5 && flux > 1.5) {
+        return { label: 'Floor Impact', score: lowEnergy / 255 };
     }
 
-    // 4. Classification Logic (Time-Frequency Rules)
-    let result = { label: 'Household', score: maxHistEnergy / 255 };
-
-    // Rule A: Impact Sounds (층간소음 - 발망치)
-    // - Time: Sudden spike (High Flux), Short duration
-    // - Freq: Low Centroid (Deep sound)
-    const isHighFlux = flux > 2.0; 
-    const isLowFreq = centroid < 25; // Index-based (approx < 500Hz)
-    
-    if (isHighFlux && isLowFreq && spectralHistory[spectralHistory.length-1].lowBandEnergy > 200) {
-        return { label: 'Floor Impact', score: Math.min(1, flux / 5) };
+    // Rule B: Road Traffic / Machinery (Mid-Low, Steady)
+    // 63~250Hz dominant, Low Flux
+    if (midLowEnergy > midHighEnergy && flux < 2.0 && totalEnergy > 20) {
+        return { label: 'Road Traffic', score: midLowEnergy / 255 };
     }
 
-    // Rule B: Stationary Sounds (지속음 - 도로/항공)
-    // - Time: Low Flux (Steady sound)
-    // - Freq: Differentiates Road vs Air
-    if (!isHighFlux && maxHistEnergy > 20) {
-        if (centroid < 40) {
-            // Low-Mid steady -> Road Traffic
-            return { label: 'Road Traffic', score: Math.min(1, maxHistEnergy / 100) };
-        } else {
-            // High steady -> Aircraft or Hiss
-            return { label: 'Aircraft/Siren', score: Math.min(1, maxHistEnergy / 100) };
-        }
+    // Rule C: Household / Voice (Mid-High, Fluctuating)
+    // 500Hz~1kHz present
+    if (midHighEnergy > 20 || flux > 1.0) {
+        return { label: 'Household', score: midHighEnergy / 255 };
     }
 
-    // Rule C: Fluctuating Sounds (생활소음 - 대화/TV)
-    // - Time: Moderate Flux (Varies naturally)
-    // - Freq: Mid range
-    if (flux > 0.5) {
-         return { label: 'Household', score: Math.min(1, flux / 3) };
-    }
-
-    return result;
+    return { label: 'none', score: 0 };
 }
 
 function updateInternalClassifierUI(analysis) {
@@ -302,7 +313,7 @@ function updateInternalClassifierUI(analysis) {
         home: document.getElementById('card-home'),
         floor: document.getElementById('card-floor'),
         road: document.getElementById('card-road'),
-        train: document.getElementById('card-train'), // merged with road logic for simplicity
+        train: document.getElementById('card-train'), 
         air: document.getElementById('card-air'),
         none: document.getElementById('card-none')
     };
@@ -315,19 +326,15 @@ function updateInternalClassifierUI(analysis) {
     switch(analysis.label) {
         case 'Floor Impact':
             if(cards.floor) cards.floor.classList.add('active');
-            displayLabel = "층간소음 (저주파)";
-            break;
-        case 'Aircraft/Siren':
-            if(cards.air) cards.air.classList.add('active');
-            displayLabel = "항공기/금속음";
+            displayLabel = "층간소음 (저주파 쿵)";
             break;
         case 'Road Traffic':
             if(cards.road) cards.road.classList.add('active');
-            displayLabel = "도로/지하철";
+            displayLabel = "도로/지하철 (저-중역대)";
             break;
         case 'Household':
             if(cards.home) cards.home.classList.add('active');
-            displayLabel = "생활 소음";
+            displayLabel = "생활 소음 (대화/가전)";
             break;
         default:
             if(cards.none) cards.none.classList.add('active');
@@ -342,13 +349,54 @@ function updateInternalClassifierUI(analysis) {
 async function setupAI(stream) {
     // 기존 AI setup 대체: 단순히 UI 초기화만 수행
     const statusLabel = document.getElementById('ai-loader');
-    if(statusLabel) statusLabel.textContent = "✅ 자체 분석 엔진 가동 (Lightweight)";
-    
-    // 분석은 main loop의 analyze() 에서 호출됨
+    if(statusLabel) statusLabel.textContent = "✅ Octave Analyzer (31.5Hz~1k) 가동";
     return true;
 }
 
-// (Legacy functions removed/replaced)
+function drawSpectrogram() {
+  requestAnimationFrame(drawSpectrogram);
+  if (!isMonitoring || isPausedForEval) return;
+
+  const width = canvas.width;
+  const height = canvas.height;
+  
+  // Clear Canvas
+  canvasCtx.clearRect(0, 0, width, height);
+  canvasCtx.fillStyle = '#f8f9fa';
+  canvasCtx.fillRect(0, 0, width, height);
+
+  // Draw Octave Bars
+  const bandWidth = (width / OCTAVE_BANDS.length) - 10;
+  const maxDbEstimate = 100; // Visual scaling factor
+
+  OCTAVE_BANDS.forEach((freq, index) => {
+      const val = currentOctaveLevels[freq] || 0; // 0-255
+      const percent = Math.min(1, val / 150); // Scale for visual
+      const barHeight = percent * height;
+      
+      const x = index * (width / OCTAVE_BANDS.length) + 5;
+      const y = height - barHeight;
+
+      // Color based on intensity
+      const hue = 120 - (percent * 120); // Green to Red
+      canvasCtx.fillStyle = `hsl(${hue}, 80%, 50%)`;
+      
+      // Draw Bar
+      canvasCtx.fillRect(x, y, bandWidth, barHeight);
+
+      // Draw Label
+      canvasCtx.fillStyle = '#555';
+      canvasCtx.font = '12px Arial';
+      canvasCtx.textAlign = 'center';
+      canvasCtx.fillText(`${freq}Hz`, x + bandWidth/2, height - 5);
+      
+      // Draw Value
+      if (barHeight > 20) {
+          canvasCtx.fillStyle = '#fff';
+          canvasCtx.fillText(val.toFixed(0), x + bandWidth/2, y + 15);
+      }
+  });
+}
 
 
 // ... rest of the code ...
