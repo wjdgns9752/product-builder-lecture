@@ -120,6 +120,10 @@ function showOnboarding(isUpdate) {
 }
 
 function saveUserInfo() {
+    // Hide modal immediately
+    userInfoModal.classList.add('hidden');
+    userInfoModal.style.display = 'none';
+
     const housingType = document.getElementById('housing-type').value;
     const floorLevel = document.getElementById('floor-level').value;
     const envType = document.getElementById('env-type').value;
@@ -144,10 +148,6 @@ function saveUserInfo() {
                 console.error("Error saving user profile: ", error);
             });
     }
-
-    // Hide modal
-    userInfoModal.classList.add('hidden');
-    userInfoModal.style.display = 'none';
 }
 
 // Init Check
