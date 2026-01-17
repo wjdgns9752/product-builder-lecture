@@ -201,7 +201,7 @@ const classCards = {
 
 // ...
 
-// --- Independent AI Module (YAMNet) ---
+// --- Independent AI Module (Speech Commands) ---
 let aiProcessor = null;
 let aiModel = null;
 
@@ -228,76 +228,45 @@ async function setupAI(stream) {
             await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.13.0/dist/tf.min.js');
         }
         
-        if (typeof yamnet === 'undefined') {
-            statusLabel.textContent = "⏳ YAMNet 다운로드 중...";
-            await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow-models/yamnet@0.0.1/dist/yamnet.min.js');
+        if (typeof speechCommands === 'undefined') {
+            statusLabel.textContent = "⏳ Speech Commands 다운로드 중...";
+            await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow-models/speech-commands@0.4.0/dist/speech-commands.min.js');
         }
         
         // Double check
-        if (typeof yamnet === 'undefined') {
-             throw new Error("YAMNet library could not be loaded.");
+        if (typeof speechCommands === 'undefined') {
+             throw new Error("Speech Commands library could not be loaded.");
         }
 
         // 2. Load Model
         if (!aiModel) {
             statusLabel.textContent = "⏳ AI 모델 초기화 중...";
-            aiModel = await yamnet.load();
+            // Create the recognizer
+            aiModel = speechCommands.create('BROWSER_FFT');
+            await aiModel.ensureModelLoaded();
             statusLabel.textContent = "✅ AI 준비 완료 (분석 중)";
         }
         
-        // 3. Hook into existing AudioContext (Best for compatibility)
-        if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        
-        const micInput = audioContext.createMediaStreamSource(stream);
-        
-        // Use ScriptProcessor (bufferSize 4096) for resampling
-        // This runs on the main thread but is widely supported
-        if (aiProcessor) aiProcessor.disconnect();
-        aiProcessor = audioContext.createScriptProcessor(4096, 1, 1);
-        
-        micInput.connect(aiProcessor);
-        aiProcessor.connect(audioContext.destination); // Needed for processing to happen
-        
-        // Circular Buffer for Resampling
-        const targetRate = 16000;
-        let buffer16k = [];
-        
-        aiProcessor.onaudioprocess = async (e) => {
-            const inputData = e.inputBuffer.getChannelData(0);
-            const originalRate = e.inputBuffer.sampleRate;
-            
-            // Visual feedback (RMS Meter)
-            let sum = 0;
-            for(let i=0; i<inputData.length; i+=10) sum += inputData[i]*inputData[i];
-            const rms = Math.sqrt(sum / (inputData.length/10));
-            if(meterFill) meterFill.style.width = `${Math.min(100, rms * 800)}%`;
-            
-            // 3. Resample & Accumulate
-            // Simple Decimation (Skip samples)
-            const step = originalRate / targetRate;
-            for (let i = 0; i < inputData.length; i += step) {
-                buffer16k.push(inputData[Math.floor(i)]);
-            }
-            
-            // 4. Predict when buffer is full (16000 samples = 1 sec)
-            if (buffer16k.length >= 16000) {
-                const chunk = new Float32Array(buffer16k.slice(0, 16000));
-                
-                // Sliding window: Remove old data (keep 50% overlap for smoothness)
-                // Remove first 8000 samples
-                buffer16k = buffer16k.slice(8000); 
-                
-                // Only predict if audible sound exists
-                if (rms > 0.01) { 
-                    const results = await aiModel.predict(chunk);
-                    const top = findTopClass(results[0]);
-                    updateAIUI(top, resultText);
-                    results[0].dispose(); // Clean Tensor
-                } else {
-                    updateAIUI({ label: 'Silence', score: 0 }, resultText);
-                }
-            }
-        };
+        // 3. Start Listening
+        // Speech Commands has its own internal audio handling
+        if (aiModel.isListening()) {
+            await aiModel.stopListening();
+        }
+
+        aiModel.listen(result => {
+             // Visual feedback (Fake RMS from scores for UI consistency)
+             const scores = result.scores;
+             const maxScore = Math.max(...scores);
+             if(meterFill) meterFill.style.width = `${Math.min(100, maxScore * 100)}%`;
+
+             const top = findTopClass(scores, aiModel.wordLabels());
+             updateAIUI(top, resultText);
+        }, {
+            includeSpectrogram: false, // We don't need it
+            probabilityThreshold: 0.75,
+            invokeCallbackOnNoiseAndUnknown: true,
+            overlapFactor: 0.50 
+        });
         
     } catch (e) {
         console.error("AI Setup Error:", e);
@@ -305,24 +274,23 @@ async function setupAI(stream) {
     }
 }
 
-function findTopClass(scores) {
-    const values = scores.dataSync();
-    const classMap = aiModel.classMap;
+function findTopClass(scores, labels) {
+    // scores is a Float32Array
     let max = -1;
     let index = -1;
-    for(let i=0; i<values.length; i++) {
-        if(values[i] > max) { max = values[i]; index = i; }
+    for(let i=0; i<scores.length; i++) {
+        if(scores[i] > max) { max = scores[i]; index = i; }
     }
-    return { label: classMap[index], score: max };
+    return { label: labels[index], score: max };
 }
 
 function updateAIUI(prediction, resultEl) {
     const cards = {
-        home: document.getElementById('card-home'),
-        floor: document.getElementById('card-floor'),
-        road: document.getElementById('card-road'),
-        train: document.getElementById('card-train'),
-        air: document.getElementById('card-air'),
+        home: document.getElementById('card-home'), // Background Noise
+        floor: document.getElementById('card-floor'), // Unknown (often impacts)
+        road: document.getElementById('card-road'), // Not perfectly mapped
+        train: document.getElementById('card-train'), // Not perfectly mapped
+        air: document.getElementById('card-air'), // Not perfectly mapped
         none: document.getElementById('card-none')
     };
     
@@ -334,50 +302,30 @@ function updateAIUI(prediction, resultEl) {
     
     if (resultEl) resultEl.textContent = `${prediction.label} (${(score*100).toFixed(0)}%)`;
 
-    // Logic
-    if (label.includes('silence') || score < 0.25) {
-        if(cards.none) cards.none.classList.add('active');
-        return;
+    // Map Speech Commands classes to our UI
+    // Classes: 'background_noise', 'unknown', 'down', 'eight', 'five', 'four', 'go', 'left', 'nine', 'no', 'one', 'right', 'seven', 'six', 'stop', 'three', 'two', 'up', 'yes', 'zero'
+    
+    if (label === 'background_noise') {
+         if(cards.home) cards.home.classList.add('active'); // Treat as ambient home noise
+         return;
     }
 
-    // 1. Home / Internal
-    if (label.includes('speech') || label.includes('music') || label.includes('domestic') || 
-        label.includes('cooking') || label.includes('water') || label.includes('vacuum') ||
-        label.includes('cleaning') || label.includes('wash') || label.includes('conversation') ||
-        label.includes('typing') || label.includes('mouse') || label.includes('click')) {
-        if(cards.home) cards.home.classList.add('active');
-        return;
-    }
-
-    // 2. Floor / Impact
-    if (label.includes('thump') || label.includes('knock') || label.includes('footsteps') || 
-        label.includes('impact') || label.includes('door') || label.includes('wood') || label.includes('tap')) {
-        if(cards.floor) cards.floor.classList.add('active');
-        return;
-    }
-
-    // 3. Road
-    if (label.includes('traffic') || label.includes('vehicle') || label.includes('car') || 
-        label.includes('bus') || label.includes('truck') || label.includes('motor') || 
-        label.includes('engine') || label.includes('street') || label.includes('siren')) {
-        if(cards.road) cards.road.classList.add('active');
-        return;
-    }
-
-    // 4. Train
-    if (label.includes('train') || label.includes('rail') || label.includes('subway') || label.includes('tram')) {
-        if(cards.train) cards.train.classList.add('active');
-        return;
-    }
-
-    // 5. Air
-    if (label.includes('aircraft') || label.includes('airplane') || label.includes('jet') || label.includes('helicopter')) {
-        if(cards.air) cards.air.classList.add('active');
-        return;
+    if (label === 'unknown') {
+         // Unknown often catches non-speech impulsive sounds
+         if(cards.floor) cards.floor.classList.add('active'); 
+         return;
     }
     
-    // Fallback -> Home
-    if(cards.home) cards.home.classList.add('active');
+    // Since this is a speech model, actual speech words will map to 'Human Voice' or similar
+    // We can map specific words to categories if we wanted, but generally speech = home/voice
+    if (['yes', 'no', 'up', 'down', 'left', 'right', 'on', 'off', 'stop', 'go'].includes(label) || !isNaN(parseInt(label))) {
+         // It's speech
+         if(cards.home) cards.home.classList.add('active');
+         return;
+    }
+
+    // Fallback
+    if(cards.none) cards.none.classList.add('active');
 }
 
 // ... rest of the code ...
