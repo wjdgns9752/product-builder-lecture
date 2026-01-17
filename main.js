@@ -119,34 +119,52 @@ function showOnboarding(isUpdate) {
     }
 }
 
-function saveUserInfo() {
-    // Hide modal immediately
-    userInfoModal.classList.add('hidden');
-    userInfoModal.style.display = 'none';
+async function saveUserInfo() {
+    try {
+        console.log("saveUserInfo called");
+        
+        // Hide modal immediately
+        if (userInfoModal) {
+            userInfoModal.classList.add('hidden');
+            userInfoModal.style.display = 'none';
+        }
 
-    const housingType = document.getElementById('housing-type').value;
-    const floorLevel = document.getElementById('floor-level').value;
-    const envType = document.getElementById('env-type').value;
+        const housingType = document.getElementById('housing-type').value;
+        const floorLevel = document.getElementById('floor-level').value;
+        const envType = document.getElementById('env-type').value;
 
-    const profile = {
-        housingType,
-        floorLevel,
-        envType,
-        updatedAt: Date.now()
-    };
+        const profile = {
+            housingType,
+            floorLevel,
+            envType,
+            updatedAt: Date.now()
+        };
 
-    // Save to localStorage
-    localStorage.setItem('user_profile', JSON.stringify(profile));
-    
-    // Save to Firestore
-    if (currentUserId) {
-        db.collection("users").doc(currentUserId).set(profile, { merge: true })
-            .then(() => {
-                console.log("User profile saved to Firestore.");
-            })
-            .catch((error) => {
-                console.error("Error saving user profile: ", error);
-            });
+        // Save to localStorage
+        localStorage.setItem('user_profile', JSON.stringify(profile));
+        
+        // Save to Firestore (Fire and forget, safe catch)
+        if (currentUserId && typeof db !== 'undefined') {
+            db.collection("users").doc(currentUserId).set(profile, { merge: true })
+                .then(() => console.log("User profile saved to Firestore."))
+                .catch((error) => console.error("Error saving user profile: ", error));
+        }
+
+        // Auto Start
+        console.log("Attempting auto-start audio...");
+        const success = await startAudio();
+        if (!success) {
+            console.warn("Auto-start failed.");
+            if (initBtn) initBtn.style.display = 'block';
+            // Alert strictly if it didn't work (and no permission modal showed)
+            // But startAudio handles permission modal.
+        }
+    } catch (e) {
+        console.error("saveUserInfo critical error:", e);
+        alert("설정을 저장하는 중 오류가 발생했습니다: " + e.message);
+        // Ensure modal is closed so user isn't stuck
+        if (userInfoModal) userInfoModal.classList.add('hidden');
+        if (initBtn) initBtn.style.display = 'block';
     }
 }
 
@@ -197,10 +215,6 @@ function loadScript(url) {
         document.head.appendChild(script);
     });
 }
-
-// --- Independent AI Module (YAMNet) ---
-let aiProcessor = null;
-let aiModel = null;
 
 async function setupAI(stream) {
     const statusLabel = document.getElementById('ai-loader');
