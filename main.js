@@ -960,13 +960,12 @@ function analyze() {
 
 // --- Advanced Analysis Function ---
 function updateAnalysis() {
-    if (dbBuffer.length < 10) return;
+    if (dbBuffer.length < 5) return;
 
     const sortedDb = [...dbBuffer].sort((a, b) => a - b);
     const L90 = sortedDb[Math.floor(sortedDb.length * 0.1)];
     const L10 = sortedDb[Math.floor(sortedDb.length * 0.9)];
     const maxDb = Math.max(...dbBuffer);
-    const minDb = Math.min(...dbBuffer);
     
     let sumEnergy = 0;
     for (let db of dbBuffer) {
@@ -974,48 +973,48 @@ function updateAnalysis() {
     }
     const Leq = 10 * Math.log10(sumEnergy / dbBuffer.length);
 
-    // Update Detail View Elements
+    // Update Analysis View Elements
     const valL90 = document.getElementById('val-l90');
     const valEvent = document.getElementById('val-event');
-    const valIr = document.getElementById('val-ir');
+    const valMax = document.getElementById('val-max');
     
     if (valL90) valL90.textContent = L90.toFixed(1);
     if (valEvent) valEvent.textContent = (Leq - L90).toFixed(1);
-    if (valIr) valIr.textContent = (L10 - L90).toFixed(1);
+    if (valMax) valMax.textContent = maxDb.toFixed(1);
 
-    // Update Analysis Comment (Sophisticated)
+    // Update Analysis Comment
     const badge = document.getElementById('noise-badge');
     const comment = document.getElementById('analysis-comment');
     
     if (badge && comment) {
-        let healthImpact = "안정적인 환경입니다.";
         if (Leq > 70) {
-            healthImpact = "심한 소음 노출! 장시간 노출 시 청력 손상 및 강한 스트레스가 우려됩니다.";
-            badge.className = "badge impulsive";
             badge.textContent = "위험";
+            badge.className = "badge impulsive";
+            comment.textContent = "심한 소음! 장시간 노출 시 난청 위험이 있습니다.";
         } else if (Leq > 55) {
-            healthImpact = "학습 및 집중에 방해가 되는 수준입니다. 휴식이 권장됩니다.";
+            badge.textContent = "경고";
             badge.className = "badge intermittent";
-            badge.textContent = "주의";
+            comment.textContent = "조용한 집중이 불가능한 수준입니다.";
         } else {
+            badge.textContent = "양호";
             badge.className = "badge steady";
-            badge.textContent = "정상";
+            comment.textContent = "안정적이고 쾌적한 소음 수준입니다.";
         }
-        comment.innerHTML = `평균: <b>${Leq.toFixed(1)}dB</b> / 최대: <b>${maxDb.toFixed(1)}dB</b><br>${healthImpact}`;
-    }
-
-    // Update Pencil Visualization
-    const pencilWrapper = document.querySelector('.pencil-wrapper');
-    if (pencilWrapper) {
-        const totalLeqPercent = Math.min(100, Math.max(0, (Leq / 120) * 100));
-        pencilWrapper.style.width = `${totalLeqPercent}%`;
-        const bodyPercent = (L90 / Math.max(0.1, Leq)) * 100;
-        document.getElementById('pencil-body').style.width = `${bodyPercent}%`;
-        document.getElementById('pencil-tip').style.width = `${100 - bodyPercent}%`;
-        document.getElementById('label-body').textContent = L90.toFixed(0);
-        document.getElementById('label-tip').textContent = `+${(Leq - L90).toFixed(0)}`;
     }
 }
+
+// Map Marker Color logic
+function getNoiseColor(db) {
+    return db > 65 ? '#f44336' : (db > 50 ? '#ffeb3b' : '#4caf50');
+}
+
+function clearMapMarkers() {
+    noiseHistory.forEach(item => map.removeLayer(item.marker));
+    noiseHistory = [];
+}
+
+const clearMapBtn = document.getElementById('btn-clear-map');
+if (clearMapBtn) clearMapBtn.addEventListener('click', clearMapMarkers);
 
 function updateUI(current, bg) {
   meterBar.style.width = `${Math.min(100, Math.max(0, current))}%`;

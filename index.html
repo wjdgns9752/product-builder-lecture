@@ -163,40 +163,37 @@
         <!-- === VIEW 2: ANALYSIS (Detailed + Dose Response) === -->
         <div id="view-analysis" class="view hidden">
             <section class="tool-section">
-                <h2>📈 심층 분석 (Impact Analysis)</h2>
-                <p class="subtitle">소음이 건강과 심리에 미치는 영향을 분석합니다.</p>
-
-                <div class="chart-container">
-                    <h3>😖 소음 불쾌감 (Annoyance) 예측</h3>
-                    <p class="desc" style="font-size:0.9rem; margin-bottom:15px; color:#666;">
-                        WHO 및 기존 연구(Miedema & Oudshoorn)의 <strong>Dose-Response 곡선</strong>을 기반으로, 현재 감지된 소음원(<span id="detected-source-text" style="color:var(--primary-color); font-weight:bold;">없음</span>)에 대한 예상 불쾌감 정도(%HA)를 보여줍니다.
-                    </p>
-                    <canvas id="doseResponseChart"></canvas>
-                    <div id="dose-result" style="margin-top:15px; font-weight:bold; color:var(--accent-color);">
-                        현재 예상 불쾌감(High Annoyance): <span id="ha-percent">0</span>%
+                <h2>📊 소음 정밀 분석</h2>
+                
+                <div class="metrics-grid">
+                    <div class="metric-box">
+                        <span class="m-label">배경 소음 (L90)</span>
+                        <span class="m-value" id="val-l90">0.0</span>
+                        <div class="m-desc">안정적인 기본 소음</div>
+                    </div>
+                    <div class="metric-box highlight">
+                        <span class="m-label">돌발 강도</span>
+                        <span class="m-value" id="val-event">0.0</span>
+                        <div class="m-desc">순간적인 소음 충격</div>
+                    </div>
+                    <div class="metric-box">
+                        <span class="m-label">최대 소음</span>
+                        <span class="m-value" id="val-max">0.0</span>
+                        <div class="m-desc">측정 중 최고 데시벨</div>
                     </div>
                 </div>
 
-                <div class="harmonica-visual">
-                    <h3>🔊 Harmonica Index 시각화</h3>
-                    <div class="pencil-legend">
-                        <span class="legend-item"><span class="dot base"></span>배경(L90)</span>
-                        <span class="legend-item"><span class="dot event"></span>돌발(Event)</span>
-                    </div>
-                    <div class="harmonica-pencil-container">
-                        <div class="pencil-wrapper">
-                            <div id="pencil-body" class="pencil-part body"><span class="p-label" id="label-body">40</span></div>
-                            <div id="pencil-tip" class="pencil-part tip"><span class="p-label" id="label-tip">+5</span></div>
-                        </div>
-                    </div>
-                    <div class="harmonica-scale">
-                        <span>0</span><span>30</span><span>60</span><span>90</span><span>120 dB</span>
+                <div class="chart-container">
+                    <h3>😖 예상 불쾌감 (%HA)</h3>
+                    <canvas id="doseResponseChart" style="height: 200px;"></canvas>
+                    <div id="dose-result" style="margin-top:10px; font-size: 0.9rem; font-weight:bold;">
+                        현재 불쾌감 지수: <span id="ha-percent" style="color:var(--accent-color);">0</span>%
                     </div>
                 </div>
 
                 <div class="analysis-comment-box">
-                    <span id="noise-badge" class="badge">분석 중...</span>
-                    <p id="analysis-comment">데이터를 수집하고 있습니다.</p>
+                    <span id="noise-badge" class="badge">측정 필요</span>
+                    <p id="analysis-comment">데이터를 분석 중입니다. 측정을 시작해 주세요.</p>
                 </div>
             </section>
         </div>
@@ -204,21 +201,14 @@
         <!-- === VIEW 3: MAP (Noise Map) === -->
         <div id="view-map" class="view hidden">
             <section class="tool-section">
-                <h2>🗺️ 소음 지도 (Noise Map)</h2>
-                <p class="subtitle">현재 위치의 소음 수준을 지도에 시각화합니다.<br>(데이터는 로컬에만 표시됩니다)</p>
+                <h2>🗺️ 실시간 소음 지도</h2>
+                <p class="subtitle">이동 경로에 따른 소음 변화가 기록됩니다.</p>
                 
-                <div id="map-container"></div>
+                <div id="map-container" style="height: 350px; border-radius: 12px; margin: 15px 0;"></div>
                 
-                <div class="controls" style="margin-top: 15px;">
-                    <button id="btn-update-location" class="secondary-btn">📍 내 위치 업데이트</button>
-                </div>
-                <div class="std-card" style="margin-top: 15px;">
-                    <h4>지도 범례</h4>
-                    <ul style="display:flex; gap:15px; font-size:0.8rem;">
-                        <li>🟢 쾌적 (50dB 미만)</li>
-                        <li>🟡 보통 (50~65dB)</li>
-                        <li>🔴 시끄러움 (65dB 이상)</li>
-                    </ul>
+                <div class="controls">
+                    <button id="btn-update-location" class="secondary-btn">📍 현재 위치로 이동</button>
+                    <button id="btn-clear-map" class="secondary-btn" style="border-color:#f44336; color:#f44336;">🗑️ 기록 삭제</button>
                 </div>
             </section>
         </div>
