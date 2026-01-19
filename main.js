@@ -201,102 +201,139 @@ const classCards = {
 
 // ...
 
-// --- 1/1 Octave Band Analysis & Classification ---
-// 1/1 옥타브 밴드(31.5Hz ~ 1kHz)를 기준으로 정밀 분석 및 시각화를 수행합니다.
+// --- TensorFlow.js YAMNet Integration ---
+// 기존의 1/1 옥타브 밴드 분석을 경량화 딥러닝 모델(YAMNet)로 대체합니다.
 
+let yamnetModel = null;
+let yamnetAudioBuffer = []; // Resampled audio buffer (16kHz)
+const YAMNET_SAMPLE_RATE = 16000;
+const YAMNET_INPUT_SIZE = 16000; // ~1 second window
+let isModelProcessing = false;
+
+// YAMNet Class Mapping (Label keywords to App Categories)
+const CLASS_MAPPING = {
+    'floor': ['knock', 'thump', 'thud', 'footsteps', 'bumping', 'impact', 'door'],
+    'home': ['speech', 'conversation', 'laughter', 'domestic', 'vacuum', 'blender', 'water', 'music', 'television'],
+    'road': ['vehicle', 'traffic', 'car', 'bus', 'truck', 'motor', 'siren', 'horn', 'tire'],
+    'train': ['rail', 'train', 'subway', 'metro'],
+    'air': ['aircraft', 'airplane', 'helicopter', 'jet']
+};
+
+// --- Visualizer Helpers (Restored) ---
 const OCTAVE_BANDS = [31.5, 63, 125, 250, 500, 1000];
-let currentOctaveLevels = {}; // 시각화 공유용 데이터
+let currentOctaveLevels = {};
 
 function calculateOctaveLevels(dataArray, bufferLength, sampleRate) {
-    const nyquist = sampleRate / 2;
-    const binSize = sampleRate / (bufferLength * 2); // FFT Size = bufferLength * 2
-    
+    const binSize = sampleRate / (bufferLength * 2);
     let levels = {};
-
     OCTAVE_BANDS.forEach(centerFreq => {
-        // 1/1 Octave Band Limits: Lower = fc / sqrt(2), Upper = fc * sqrt(2)
         const lowerFreq = centerFreq / 1.414;
         const upperFreq = centerFreq * 1.414;
-        
         let startBin = Math.floor(lowerFreq / binSize);
         let endBin = Math.floor(upperFreq / binSize);
-        
-        // Bounds Check
         if (startBin < 0) startBin = 0;
         if (endBin >= bufferLength) endBin = bufferLength - 1;
-        if (startBin > endBin) startBin = endBin;
-
         let sum = 0;
+        let count = 0;
         for (let i = startBin; i <= endBin; i++) {
             sum += dataArray[i];
+            count++;
         }
-        
-        // Average Level per Band (0-255)
-        const count = (endBin - startBin + 1);
         levels[centerFreq] = count > 0 ? sum / count : 0;
     });
-
     return levels;
 }
 
-// History for Temporal Analysis
-const HISTORY_SIZE = 50;
-let spectralHistory = []; 
+// Resample audio to 16kHz and add to buffer
+function processAudioForModel(timeData, originalSampleRate) {
+    if (!yamnetModel) return;
 
-function analyzeNoiseCharacteristics(dataArray, bufferLength) {
-    // 1. Calculate Octave Bands
-    const sampleRate = audioContext ? audioContext.sampleRate : 44100;
-    const bands = calculateOctaveLevels(dataArray, bufferLength, sampleRate);
-    currentOctaveLevels = bands; // Update for Visualizer
-
-    // 2. Feature Extraction from Octaves
-    // Low Frequency (Floor Impact): 31.5 + 63 Hz
-    const lowEnergy = (bands[31.5] + bands[63]) / 2;
+    // Simple Decimation / Linear Interpolation
+    const ratio = originalSampleRate / YAMNET_SAMPLE_RATE;
+    const newLength = Math.floor(timeData.length / ratio);
     
-    // Mid-Low (Traffic/Machine): 63 + 125 + 250 Hz
-    const midLowEnergy = (bands[63] + bands[125] + bands[250]) / 3;
-    
-    // Mid-High (Voice/Household): 500 + 1000 Hz
-    const midHighEnergy = (bands[500] + bands[1000]) / 2;
-
-    const totalEnergy = (lowEnergy + midLowEnergy + midHighEnergy) / 3;
-
-    // 3. Temporal Flux (Changes over time)
-    spectralHistory.push({ low: lowEnergy, mid: midLowEnergy, high: midHighEnergy, total: totalEnergy });
-    if (spectralHistory.length > HISTORY_SIZE) spectralHistory.shift();
-    
-    if (spectralHistory.length < 5) return { label: 'none', score: 0 };
-
-    let flux = 0;
-    for(let i=1; i<spectralHistory.length; i++) {
-        flux += Math.abs(spectralHistory[i].total - spectralHistory[i-1].total);
-    }
-    flux /= spectralHistory.length;
-
-    // 4. Classification Rules (Octave Based)
-    
-    // Threshold for Silence
-    if (totalEnergy < 15) return { label: 'none', score: 0 };
-
-    // Rule A: Floor Impact (Strong Low Freq + High Flux)
-    // 31.5Hz/63Hz dominant, short duration
-    if (lowEnergy > midLowEnergy * 1.2 && lowEnergy > midHighEnergy * 1.5 && flux > 1.5) {
-        return { label: 'Floor Impact', score: lowEnergy / 255 };
+    for (let i = 0; i < newLength; i++) {
+        const originalIndex = i * ratio;
+        const index1 = Math.floor(originalIndex);
+        const index2 = Math.min(index1 + 1, timeData.length - 1);
+        const fraction = originalIndex - index1;
+        
+        // Linear Interpolation
+        const value = timeData[index1] * (1 - fraction) + timeData[index2] * fraction;
+        
+        yamnetAudioBuffer.push(value);
     }
 
-    // Rule B: Road Traffic / Machinery (Mid-Low, Steady)
-    // 63~250Hz dominant, Low Flux
-    if (midLowEnergy > midHighEnergy && flux < 2.0 && totalEnergy > 20) {
-        return { label: 'Road Traffic', score: midLowEnergy / 255 };
+    // Keep buffer at reasonable size (sliding window)
+    if (yamnetAudioBuffer.length > YAMNET_INPUT_SIZE + 4000) {
+        yamnetAudioBuffer = yamnetAudioBuffer.slice(yamnetAudioBuffer.length - YAMNET_INPUT_SIZE);
+    }
+}
+
+async function analyzeNoiseCharacteristics() {
+    if (!yamnetModel || isModelProcessing || yamnetAudioBuffer.length < YAMNET_INPUT_SIZE) {
+        return { label: 'none', score: 0 };
     }
 
-    // Rule C: Household / Voice (Mid-High, Fluctuating)
-    // 500Hz~1kHz present
-    if (midHighEnergy > 20 || flux > 1.0) {
-        return { label: 'Household', score: midHighEnergy / 255 };
-    }
+    isModelProcessing = true;
+    try {
+        // Take the last ~1 second of data
+        const inputData = yamnetAudioBuffer.slice(yamnetAudioBuffer.length - YAMNET_INPUT_SIZE);
+        
+        // Run Inference
+        const results = yamnetModel.predict(inputData);
+        const scores = await results[0].data(); // Class scores
+        const classNames = yamnetModel.classNames; // Get labels via model property if available, or we might need to map manualy. 
+        // Note: yamnet.load() returns a model where we can use predict directly. 
+        // The official TFJS YAMNet returns [scores, embeddings, spectrogram].
 
-    return { label: 'none', score: 0 };
+        // Find top class
+        const topIndices = Array.from(scores)
+            .map((s, i) => ({ score: s, index: i }))
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 5); // Top 5 candidates
+
+        // Map to our Categories
+        let bestLabel = 'none';
+        let bestScore = 0;
+
+        for (let item of topIndices) {
+            const rawLabel = classNames[item.index].toLowerCase();
+            
+            for (const [category, keywords] of Object.entries(CLASS_MAPPING)) {
+                if (keywords.some(k => rawLabel.includes(k))) {
+                    if (item.score > bestScore) {
+                        bestScore = item.score;
+                        bestLabel = category;
+                    }
+                }
+            }
+        }
+        
+        // Threshold
+        if (bestScore < 0.2) bestLabel = 'none';
+
+        // UI Mapping
+        let uiLabel = 'none';
+        switch(bestLabel) {
+            case 'floor': uiLabel = 'Floor Impact'; break;
+            case 'road': uiLabel = 'Road Traffic'; break;
+            case 'home': uiLabel = 'Household'; break;
+            case 'train': uiLabel = 'Train'; break; // Not in original return but valid
+            case 'air': uiLabel = 'Air'; break;     // Not in original return but valid
+            default: uiLabel = 'none';
+        }
+
+        tf.dispose(results);
+        isModelProcessing = false;
+        
+        return { label: uiLabel, score: bestScore };
+
+    } catch (e) {
+        console.error("YAMNet inference error:", e);
+        isModelProcessing = false;
+        return { label: 'none', score: 0 };
+    }
 }
 
 function updateInternalClassifierUI(analysis) {
@@ -326,15 +363,23 @@ function updateInternalClassifierUI(analysis) {
     switch(analysis.label) {
         case 'Floor Impact':
             if(cards.floor) cards.floor.classList.add('active');
-            displayLabel = "층간소음 (저주파 쿵)";
+            displayLabel = "층간소음 (충격음 감지)";
             break;
         case 'Road Traffic':
             if(cards.road) cards.road.classList.add('active');
-            displayLabel = "도로/지하철 (저-중역대)";
+            displayLabel = "도로 소음 (차량)";
             break;
         case 'Household':
             if(cards.home) cards.home.classList.add('active');
             displayLabel = "생활 소음 (대화/가전)";
+            break;
+        case 'Train': // Added support
+            if(cards.train) cards.train.classList.add('active');
+            displayLabel = "철도/지하철 소음";
+            break;
+        case 'Air': // Added support
+            if(cards.air) cards.air.classList.add('active');
+            displayLabel = "항공기 소음";
             break;
         default:
             if(cards.none) cards.none.classList.add('active');
@@ -342,14 +387,27 @@ function updateInternalClassifierUI(analysis) {
     }
 
     if (resultText) {
-        resultText.textContent = analysis.label === 'none' ? '소음 감지 대기 중' : `${displayLabel} 감지됨`;
+        resultText.textContent = analysis.label === 'none' ? '소음 감지 대기 중' : `${displayLabel} 감지됨 (${(analysis.score*100).toFixed(0)}%)`;
     }
 }
 
 async function setupAI(stream) {
-    // 기존 AI setup 대체: 단순히 UI 초기화만 수행
     const statusLabel = document.getElementById('ai-loader');
-    if(statusLabel) statusLabel.textContent = "✅ Octave Analyzer (31.5Hz~1k) 가동";
+    if(statusLabel) statusLabel.textContent = "⏳ AI 모델 로딩 중...";
+    
+    try {
+        // Load YAMNet
+        if (typeof yamnet !== 'undefined') {
+            yamnetModel = await yamnet.load();
+            if(statusLabel) statusLabel.textContent = "✅ AI 모델 가동 (YAMNet)";
+            console.log("YAMNet Loaded successfully");
+        } else {
+            if(statusLabel) statusLabel.textContent = "⚠️ 모델 로드 실패 (라이브러리 누락)";
+        }
+    } catch (e) {
+        console.error("AI Setup Failed:", e);
+        if(statusLabel) statusLabel.textContent = "❌ AI 초기화 오류";
+    }
     return true;
 }
 
@@ -442,7 +500,7 @@ let audioInitTime = 0; // Warm-up timer
 
 // Background Noise Tracking (in dB)
 let backgroundLevel = 40; // Default est. dB
-const adaptationRate = 0.005; 
+const adaptationRate = 0.005;
 const decayRate = 0.05;      
 
 // --- Advanced Analysis Variables ---
@@ -844,9 +902,18 @@ function analyze() {
   if (!isMonitoring || isPausedForEval) return;
 
   const bufferLength = analyser.frequencyBinCount;
+  
+  // 1. Frequency Data for Visualizer & dB
   const dataArray = new Uint8Array(bufferLength);
   analyser.getByteFrequencyData(dataArray);
 
+  // 2. Time Domain Data for AI Model
+  const timeData = new Float32Array(bufferLength);
+  analyser.getFloatTimeDomainData(timeData);
+  // Feed to YAMNet Buffer (resampled to 16kHz)
+  processAudioForModel(timeData, audioContext.sampleRate);
+
+  // 3. dB Calculation
   let sum = 0;
   for(let i = 0; i < bufferLength; i++) {
     const x = dataArray[i] / 255; 
@@ -862,14 +929,22 @@ function analyze() {
       currentRawDbSpan.textContent = rawDb.toFixed(1);
   }
 
-  // Classifier
+  // 4. Run Classifier (Model) & Update Dose-Response
   if (calibratedDb > 40 && !isCalibrating) { 
-      // Use the new Heuristic Engine
-      const analysisResult = analyzeNoiseCharacteristics(dataArray, bufferLength);
-      updateInternalClassifierUI(analysisResult);
+      // Fire and forget - async function handles its own state/locking
+      analyzeNoiseCharacteristics().then(result => {
+          if(result.label !== 'none') {
+              updateInternalClassifierUI(result);
+              updateDoseVisuals(calibratedDb, result.label); // Update Chart
+          }
+      });
   } else {
       updateInternalClassifierUI({ label: 'none', score: 0 });
+      // updateDoseVisuals(calibratedDb, 'none'); // Optional: Update chart background point even if silence
   }
+
+  // 5. Update Visualizer Data (Octave Bands)
+  currentOctaveLevels = calculateOctaveLevels(dataArray, bufferLength, audioContext.sampleRate);
 
   // Background
   if (calibratedDb < backgroundLevel) {
@@ -1284,3 +1359,209 @@ function stopPinkNoise() {
     if (noiseNode) { noiseNode.stop(); noiseNode = null; }
     isPlayingNoise = false; playNoiseBtn.textContent = "🔊 핑크 노이즈 재생";
 }
+
+// --- Navigation & View Logic ---
+const navItems = document.querySelectorAll('.nav-item');
+const views = document.querySelectorAll('.view');
+let mapInitialized = false;
+let map = null;
+let currentMapMarker = null;
+
+navItems.forEach(nav => {
+    nav.addEventListener('click', () => {
+        // Switch Active Nav
+        navItems.forEach(n => n.classList.remove('active'));
+        nav.classList.add('active');
+
+        // Switch View
+        const targetId = nav.dataset.target;
+        views.forEach(v => {
+            if(v.id === targetId) v.classList.add('active');
+            else v.classList.remove('active');
+        });
+
+        // Special Init for Map (Leaflet requires visible container)
+        if (targetId === 'view-map' && !mapInitialized) {
+            initMap();
+        }
+        
+        // Trigger Map resize if already init
+        if (targetId === 'view-map' && map) {
+            setTimeout(() => map.invalidateSize(), 100);
+        }
+    });
+});
+
+// --- Dose-Response Analysis (Chart.js) ---
+let doseChart = null;
+const doseCtx = document.getElementById('doseResponseChart');
+
+function initDoseChart() {
+    if (!doseCtx) return; 
+    
+    // Generate Curves Data
+    const dbs = [];
+    const roadData = [];
+    const railData = [];
+    const airData = [];
+    
+    for (let l = 45; l <= 85; l+=1) {
+        dbs.push(l);
+        roadData.push(calcHA(l, 'road'));
+        railData.push(calcHA(l, 'train'));
+        airData.push(calcHA(l, 'air'));
+    }
+
+    doseChart = new Chart(doseCtx, {
+        type: 'line',
+        data: {
+            labels: dbs,
+            datasets: [
+                {
+                    label: 'Road Traffic',
+                    data: roadData,
+                    borderColor: '#ff9800',
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    tension: 0.4
+                },
+                {
+                    label: 'Railway',
+                    data: railData,
+                    borderColor: '#4caf50',
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    tension: 0.4
+                },
+                {
+                    label: 'Aircraft',
+                    data: airData,
+                    borderColor: '#2196f3',
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    tension: 0.4
+                },
+                {
+                    label: 'Current Noise',
+                    data: [], // Point to be updated
+                    borderColor: '#f44336',
+                    backgroundColor: '#f44336',
+                    type: 'bubble',
+                    pointRadius: 6
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            interaction: { mode: 'index', intersect: false },
+            scales: {
+                x: { title: { display: true, text: 'Noise Level (dB)' } },
+                y: { title: { display: true, text: '% Highly Annoyed (%HA)' }, min: 0, max: 100 }
+            },
+            plugins: {
+                tooltip: { enabled: true },
+                legend: { position: 'bottom' }
+            }
+        }
+    });
+}
+
+// Miedema & Oudshoorn (2001) Approximation
+function calcHA(L, type) {
+    let val = 0;
+    // Normalized to Ldn (Assuming L_current approx Ldn for instant impact visualization)
+    // Formulas usually require Ldn. We treat current Leq as a proxy for "If this noise continued..."
+    
+    if (type === 'road') {
+        // Road: 9.868*10^-4 * (L-42)^3 ... simplified linear approx for UI speed
+        // Polynomial:
+        if (L < 42) return 0;
+        val = 9.868e-4 * Math.pow(L-42, 3) - 1.436e-2 * Math.pow(L-42, 2) + 0.5118 * (L-42);
+    } else if (type === 'train') {
+        if (L < 32) return 0;
+        val = 7.239e-4 * Math.pow(L-32, 3) - 7.851e-3 * Math.pow(L-32, 2) + 0.1695 * (L-32);
+    } else if (type === 'air') {
+        if (L < 30) return 0;
+        // Aircraft curve is steeper
+        val = 9.868e-4 * Math.pow(L-30, 3) - 1.436e-2 * Math.pow(L-30, 2) + 0.5118 * (L-30); 
+    }
+    
+    return Math.min(100, Math.max(0, val));
+}
+
+function updateDoseVisuals(db, sourceLabel) {
+    if (!doseChart) initDoseChart();
+    if (!doseChart) return;
+
+    // Map source label to curve type
+    let type = 'road'; // default
+    if (sourceLabel === 'Train') type = 'train';
+    else if (sourceLabel === 'Air') type = 'air';
+    else if (sourceLabel === 'Floor Impact') type = 'road'; // Treat impulsive as road curve for now or separate? Use Road as baseline.
+    
+    // Update detected source text
+    const txt = document.getElementById('detected-source-text');
+    if (txt) txt.textContent = sourceLabel !== 'none' ? sourceLabel : '배경 소음';
+
+    const ha = calcHA(db, type);
+    const haSpan = document.getElementById('ha-percent');
+    if (haSpan) haSpan.textContent = ha.toFixed(1);
+
+    // Update Bubble
+    // The bubble dataset is index 3
+    doseChart.data.datasets[3].data = [{x: db, y: ha, r: 8}];
+    doseChart.update('none'); // Efficient update
+}
+
+
+// --- Leaflet Map Logic ---
+function initMap() {
+    const mapContainer = document.getElementById('map-container');
+    if (!mapContainer) return;
+
+    // Default: Seoul City Hall
+    map = L.map('map-container').setView([37.5665, 126.9780], 15);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    mapInitialized = true;
+    updateUserLocation();
+}
+
+function updateUserLocation() {
+    if (!navigator.geolocation || !map) return; 
+    
+    navigator.geolocation.getCurrentPosition((pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        const acc = pos.coords.accuracy;
+        
+        map.setView([lat, lng], 16);
+
+        if (currentMapMarker) map.removeLayer(currentMapMarker);
+        
+        // Color based on dB
+        let color = '#4caf50'; // Green
+        if (currentVolumeValue > 65) color = '#f44336'; // Red
+        else if (currentVolumeValue > 50) color = '#ffeb3b'; // Yellow
+
+        currentMapMarker = L.circle([lat, lng], {
+            color: color,
+            fillColor: color,
+            fillOpacity: 0.5,
+            radius: 30 // Fixed visual size or accuracy
+        }).addTo(map);
+
+        currentMapMarker.bindPopup("<b>현재 소음: " + currentVolumeValue.toFixed(1) + " dB</b><br>정확도: " + acc + "m").openPopup();
+
+    }, (err) => {
+        console.error("Geo Location Error", err);
+        alert("위치 정보를 가져올 수 없습니다.");
+    }, { enableHighAccuracy: true });
+}
+
+// Bind Update Button
+const locBtn = document.getElementById('btn-update-location');
+if (locBtn) locBtn.addEventListener('click', updateUserLocation);

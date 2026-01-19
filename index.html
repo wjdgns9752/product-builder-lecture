@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="description" content="웹에서 바로 사용하는 실시간 환경 소음 측정기 (층간소음, 항공기, 도로, 철도). 데시벨(dB) 측정, 소음 기록 저장, 분야별 법적 기준 정보를 제공합니다. 별도의 설치 없이 마이크로 간편하게 측정하세요.">
     <meta name="keywords" content="소음 측정기, 층간소음, 항공기 소음, 도로교통 소음, 철도 소음, 데시벨 측정, 소음 기준">
     <meta property="og:title" content="스마트 환경 소음 모니터 - 실시간 데시벨 측정">
@@ -16,10 +16,17 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
 
-    <link rel="stylesheet" href="style.css?v=14">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔊</text></svg>">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔊</text></svg>">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔊</text></svg>">
+    <!-- TensorFlow.js and YAMNet -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/speech-commands@latest/dist/speech-commands.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/yamnet@0.0.1/dist/yamnet.min.js"></script>
+
+    <!-- Chart.js & Leaflet -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <link rel="stylesheet" href="style.css?v=15">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔊</text></svg>">
     
     <!-- Google AdSense -->
@@ -54,347 +61,297 @@
     </header>
 
     <main class="container">
-        <!-- Main Tool Section -->
-        <section class="tool-section">
-            <h1>실시간 환경 소음 모니터링</h1>
-            <p class="subtitle">마이크를 통해 층간소음, 항공기, 도로, 철도 소음을 측정하고 기준을 확인하세요.</p>
-            
-            <canvas id="visualizer" width="600" height="100"></canvas>
-            
-            <!-- Noise Classification UI (Reset) -->
-            <div class="classifier-container">
-                <h3>🔍 소음원 분석 (AI Labs)</h3>
+        
+        <!-- === VIEW 1: MONITOR (Main) === -->
+        <div id="view-monitor" class="view active">
+            <section class="tool-section">
+                <h1>실시간 환경 소음 모니터링</h1>
+                <p class="subtitle">AI 기반 소음원 분석 및 실시간 측정</p>
                 
-                <div class="class-grid" id="ai-grid">
-                    <div class="class-card" id="card-home">
-                        <div class="icon">🏠</div>
-                        <div class="label">생활소음</div>
-                        <div class="sub">내부 발생/가전</div>
+                <canvas id="visualizer" width="600" height="100"></canvas>
+                
+                <!-- Noise Classification UI -->
+                <div class="classifier-container">
+                    <h3>🔍 AI 소음원 분석 (YAMNet)</h3>
+                    
+                    <div class="class-grid" id="ai-grid">
+                        <div class="class-card" id="card-home">
+                            <div class="icon">🏠</div>
+                            <div class="label">생활소음</div>
+                        </div>
+                        <div class="class-card" id="card-floor">
+                            <div class="icon">👣</div>
+                            <div class="label">층간소음</div>
+                        </div>
+                        <div class="class-card" id="card-road">
+                            <div class="icon">🚗</div>
+                            <div class="label">도로교통</div>
+                        </div>
+                        <div class="class-card" id="card-train">
+                            <div class="icon">🚆</div>
+                            <div class="label">철도/지하철</div>
+                        </div>
+                        <div class="class-card" id="card-air">
+                            <div class="icon">✈️</div>
+                            <div class="label">항공기</div>
+                        </div>
+                        <div class="class-card active" id="card-none">
+                            <div class="icon">⏸️</div>
+                            <div class="label">대기 중</div>
+                        </div>
                     </div>
-                    <div class="class-card" id="card-floor">
-                        <div class="icon">👣</div>
-                        <div class="label">층간소음</div>
-                        <div class="sub">발소리/충격</div>
-                    </div>
-                    <div class="class-card" id="card-road">
-                        <div class="icon">🚗</div>
-                        <div class="label">도로교통</div>
-                        <div class="sub">자동차/버스</div>
-                    </div>
-                    <div class="class-card" id="card-train">
-                        <div class="icon">🚆</div>
-                        <div class="label">철도/지하철</div>
-                        <div class="sub">기차/역</div>
-                    </div>
-                    <div class="class-card" id="card-air">
-                        <div class="icon">✈️</div>
-                        <div class="label">항공기</div>
-                        <div class="sub">비행기/헬기</div>
-                    </div>
-                    <div class="class-card active" id="card-none">
-                        <div class="icon">⏸️</div>
-                        <div class="label">대기 중</div>
-                        <div class="sub">소음 감지 안됨</div>
+    
+                    <div id="ai-status-bar" style="margin-top: 15px; padding: 10px; background: #f5f5f5; border-radius: 8px; font-size: 0.85rem; color: #555;">
+                        <span id="ai-loader">⏳ AI 모델 준비 중...</span>
+                        <div id="ai-meter" style="height: 4px; background: #ddd; margin-top: 5px; border-radius: 2px; overflow: hidden;">
+                            <div id="ai-meter-fill" style="width: 0%; height: 100%; background: var(--primary-color); transition: width 0.2s;"></div>
+                        </div>
+                        <div id="ai-result-text" style="margin-top: 5px; font-weight: bold; color: var(--primary-color);"></div>
                     </div>
                 </div>
-
-                <div id="ai-status-bar" style="margin-top: 15px; padding: 10px; background: #f5f5f5; border-radius: 8px; font-size: 0.85rem; color: #555;">
-                    <span id="ai-loader">⏳ AI 모델 준비 중...</span>
-                    <div id="ai-meter" style="height: 4px; background: #ddd; margin-top: 5px; border-radius: 2px; overflow: hidden;">
-                        <div id="ai-meter-fill" style="width: 0%; height: 100%; background: var(--primary-color); transition: width 0.2s;"></div>
+                
+                <div class="status-panel">
+                    <h2 id="status-text">상태: 대기 중</h2>
+                    
+                    <div class="info-text">
+                        <span>현재: <span id="current-vol">0</span> dB</span>
+                        <span>배경: <span id="bg-vol">0</span> dB</span>
                     </div>
-                    <div id="ai-result-text" style="margin-top: 5px; font-weight: bold; color: var(--primary-color);"></div>
+                    
+                    <div class="meter-container">
+                        <div id="bg-marker"></div>
+                        <div id="meter-bar"></div>
+                    </div>
+    
+                    <div class="duration-container">
+                        <div class="duration-label">지속 시간 감지</div>
+                        <div class="duration-track">
+                            <div id="duration-bar"></div>
+                        </div>
+                    </div>
+                </div>
+    
+                <div class="controls">
+                    <button id="init-btn" class="primary-btn">모니터링 시작</button>
+                    <button id="record-btn" class="record-btn hidden">🔴 녹음 시작</button>
+                </div>
+            </section>
+
+            <!-- Harmonica Index (Summary) -->
+            <div class="analysis-dashboard" style="margin-top: 20px;">
+                <h3>📊 실시간 성향 분석 (Harmonica)</h3>
+                <div class="metrics-grid">
+                    <div class="metric-box">
+                        <span class="m-label">배경 소음 (L90)</span>
+                        <span class="m-value" id="val-l90">-</span>
+                        <div class="m-desc">기본 소음</div>
+                    </div>
+                    <div class="metric-box highlight">
+                        <span class="m-label">돌발 강도 (Event)</span>
+                        <span class="m-value" id="val-event">-</span>
+                        <div class="m-desc">체감 충격</div>
+                    </div>
+                    <div class="metric-box">
+                        <span class="m-label">변동성 (Fluct)</span>
+                        <span class="m-value" id="val-ir">-</span>
+                        <div class="m-desc">변화폭</div>
+                    </div>
                 </div>
             </div>
-            
-            <div class="status-panel">
-                <h2 id="status-text">상태: 대기 중</h2>
-                
-                <div class="info-text">
-                    <span>현재 소음: <span id="current-vol">0</span> dB (상대값)</span>
-                    <span>배경 소음: <span id="bg-vol">0</span></span>
-                </div>
-                
-                <div class="meter-container">
-                    <div id="bg-marker"></div>
-                    <div id="meter-bar"></div>
-                </div>
+        </div>
 
-                <div class="duration-container">
-                    <div class="duration-label">지속 시간 감지</div>
-                    <div class="duration-track">
-                        <div id="duration-bar"></div>
+        <!-- === VIEW 2: ANALYSIS (Detailed + Dose Response) === -->
+        <div id="view-analysis" class="view hidden">
+            <section class="tool-section">
+                <h2>📈 심층 분석 (Impact Analysis)</h2>
+                <p class="subtitle">소음이 건강과 심리에 미치는 영향을 분석합니다.</p>
+
+                <div class="chart-container">
+                    <h3>😖 소음 불쾌감 (Annoyance) 예측</h3>
+                    <p class="desc" style="font-size:0.9rem; margin-bottom:15px; color:#666;">
+                        WHO 및 기존 연구(Miedema & Oudshoorn)의 <strong>Dose-Response 곡선</strong>을 기반으로, 현재 감지된 소음원(<span id="detected-source-text" style="color:var(--primary-color); font-weight:bold;">없음</span>)에 대한 예상 불쾌감 정도(%HA)를 보여줍니다.
+                    </p>
+                    <canvas id="doseResponseChart"></canvas>
+                    <div id="dose-result" style="margin-top:15px; font-weight:bold; color:var(--accent-color);">
+                        현재 예상 불쾌감(High Annoyance): <span id="ha-percent">0</span>%
                     </div>
                 </div>
-            </div>
 
-            <!-- Advanced Analysis Dashboard (Harmonica & Event) -->
-            <div class="analysis-dashboard">
-                <h3>📊 소음 성향 정밀 분석 (Harmonica & Event)</h3>
-                
                 <div class="harmonica-visual">
+                    <h3>🔊 Harmonica Index 시각화</h3>
                     <div class="pencil-legend">
                         <span class="legend-item"><span class="dot base"></span>배경(L90)</span>
                         <span class="legend-item"><span class="dot event"></span>돌발(Event)</span>
                     </div>
-                    
                     <div class="harmonica-pencil-container">
-                        <!-- The Pencil Visual -->
                         <div class="pencil-wrapper">
-                            <div id="pencil-body" class="pencil-part body">
-                                <span class="p-label" id="label-body">40</span>
-                            </div>
-                            <div id="pencil-tip" class="pencil-part tip">
-                                <span class="p-label" id="label-tip">+5</span>
-                            </div>
+                            <div id="pencil-body" class="pencil-part body"><span class="p-label" id="label-body">40</span></div>
+                            <div id="pencil-tip" class="pencil-part tip"><span class="p-label" id="label-tip">+5</span></div>
                         </div>
                     </div>
-
                     <div class="harmonica-scale">
-                        <span>0</span>
-                        <span>30</span>
-                        <span>60</span>
-                        <span>90</span>
-                        <span>120 dB</span>
-                    </div>
-                </div>
-
-                <div class="metrics-grid">
-                    <div class="metric-box">
-                        <span class="m-label">배경 소음도 (L90)</span>
-                        <span class="m-value" id="val-l90">-</span>
-                        <span class="m-unit">dB</span>
-                        <div class="m-desc" id="desc-l90">기본 소음</div>
-                    </div>
-                    <div class="metric-box highlight">
-                        <span class="m-label">돌발 영향력 (Event)</span>
-                        <span class="m-value" id="val-event">-</span>
-                        <span class="m-unit">dB</span>
-                        <div class="m-desc" id="desc-event">분석 중...</div>
-                    </div>
-                    <div class="metric-box">
-                        <span class="m-label">변동성 (Fluctuation)</span>
-                        <span class="m-value" id="val-ir">-</span>
-                        <span class="m-unit">%</span>
-                        <div class="m-desc" id="desc-ir">분석 중...</div>
+                        <span>0</span><span>30</span><span>60</span><span>90</span><span>120 dB</span>
                     </div>
                 </div>
 
                 <div class="analysis-comment-box">
                     <span id="noise-badge" class="badge">분석 중...</span>
-                    <p id="analysis-comment">최근 30초 간의 소음 패턴을 분석하고 있습니다.</p>
+                    <p id="analysis-comment">데이터를 수집하고 있습니다.</p>
                 </div>
-            </div>
-
-            <div class="controls">
-                <button id="init-btn" class="primary-btn">모니터링 시작</button>
-                <button id="record-btn" class="record-btn hidden">🔴 녹음 시작</button>
-            </div>
-
-            <div class="settings">
-                <h3>설정 (Sensitivity)</h3>
-                <div class="desc">알림 임계값 조절 (배경 소음 대비 민감도)</div>
-                <div class="slider-wrapper">
-                    <input type="range" id="threshold" min="10" max="100" value="50">
-                    <span id="threshold-val">50</span>%
-                </div>
-                
-            <br>
-            <button id="calibration-btn" class="secondary-btn">🎙️ 마이크 보정 (Calibration)</button>
-            <br>
-            <label>
-                <input type="checkbox" id="audio-alarm" checked>
-                알림음 켜기
-            </label>
+            </section>
         </div>
 
-        <button id="theme-toggle" class="theme-btn">테마 변경</button>
-    </section>
+        <!-- === VIEW 3: MAP (Noise Map) === -->
+        <div id="view-map" class="view hidden">
+            <section class="tool-section">
+                <h2>🗺️ 소음 지도 (Noise Map)</h2>
+                <p class="subtitle">현재 위치의 소음 수준을 지도에 시각화합니다.<br>(데이터는 로컬에만 표시됩니다)</p>
+                
+                <div id="map-container"></div>
+                
+                <div class="controls" style="margin-top: 15px;">
+                    <button id="btn-update-location" class="secondary-btn">📍 내 위치 업데이트</button>
+                </div>
+                <div class="std-card" style="margin-top: 15px;">
+                    <h4>지도 범례</h4>
+                    <ul style="display:flex; gap:15px; font-size:0.8rem;">
+                        <li>🟢 쾌적 (50dB 미만)</li>
+                        <li>🟡 보통 (50~65dB)</li>
+                        <li>🔴 시끄러움 (65dB 이상)</li>
+                    </ul>
+                </div>
+            </section>
+        </div>
 
-    <!-- ... (Previous Info Section) ... -->
+        <!-- === VIEW 4: INFO (Settings & Guide) === -->
+        <div id="view-info" class="view hidden">
+            <section class="tool-section">
+                <h2>⚙️ 설정 및 가이드</h2>
+                
+                <div class="settings">
+                    <h3>알림 민감도 설정</h3>
+                    <div class="slider-wrapper">
+                        <input type="range" id="threshold" min="10" max="100" value="50">
+                        <span id="threshold-val">50</span>%
+                    </div>
+                    <br>
+                    <button id="calibration-btn" class="secondary-btn">🎙️ 마이크 보정 (Calibration)</button>
+                    <br>
+                    <label>
+                        <input type="checkbox" id="audio-alarm" checked>
+                        알림음 켜기
+                    </label>
+                    <button id="theme-toggle" class="theme-btn" style="margin-top:10px">테마 변경</button>
+                </div>
 
-    <!-- Calibration Modal -->
+                <div class="content-block" style="margin-top: 30px;">
+                    <h3>🛠️ 정확한 측정을 위한 팁</h3>
+                    <ol class="text-list">
+                        <li><strong>마이크 보정:</strong> 기기마다 감도가 다릅니다. '보정' 기능을 꼭 사용하세요.</li>
+                        <li><strong>위치:</strong> 소음원 방향으로 마이크를 향하게 하세요.</li>
+                        <li><strong>배경음 학습:</strong> 시작 후 30초간 큰 소리를 내지 마세요.</li>
+                    </ol>
+                </div>
+
+                <div class="content-block">
+                    <h3>⚖️ 소음 기준 (요약)</h3>
+                    <div class="standard-grid">
+                        <div class="std-card">
+                            <h4>층간소음</h4>
+                            <div class="std-desc">공동주택 기준</div>
+                            <ul>
+                                <li>주간: 39dB</li>
+                                <li>야간: 34dB</li>
+                            </ul>
+                        </div>
+                        <div class="std-card">
+                            <h4>도로교통</h4>
+                            <div class="std-desc">주거지역</div>
+                            <ul>
+                                <li>주간: 68dB</li>
+                                <li>야간: 58dB</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <footer style="padding:0; margin-top:20px;">
+                    <a href="#" id="admin-mode-btn">관리자 모드</a>
+                </footer>
+            </section>
+        </div>
+
+    </main>
+
+    <!-- Navigation Bar -->
+    <nav class="bottom-nav">
+        <button class="nav-item active" data-target="view-monitor">
+            <span class="icon">📊</span>
+            <span>측정</span>
+        </button>
+        <button class="nav-item" data-target="view-analysis">
+            <span class="icon">📈</span>
+            <span>분석</span>
+        </button>
+        <button class="nav-item" data-target="view-map">
+            <span class="icon">🗺️</span>
+            <span>지도</span>
+        </button>
+        <button class="nav-item" data-target="view-info">
+            <span class="icon">⚙️</span>
+            <span>설정/정보</span>
+        </button>
+    </nav>
+
+    <!-- Modals (Preserved) -->
     <div id="calibration-modal" class="modal hidden">
         <div class="modal-content">
             <h2>마이크 보정</h2>
             <p class="desc">정확한 측정을 위해 기준점을 설정합니다.</p>
-            
             <div class="calib-step">
                 <span class="step-num">1</span>
-                <p>핑크 노이즈를 재생하여 일정한 소음 환경을 만드세요.<br>(또는 조용한 방이라면 생략 가능)</p>
+                <p>핑크 노이즈 재생 (선택)</p>
                 <button id="play-noise-btn">🔊 핑크 노이즈 재생/중지</button>
             </div>
-
             <div class="calib-step">
                 <span class="step-num">2</span>
-                <p><strong>자동 정밀 보정 (권장)</strong></p>
-                <p class="sub-desc">정확도를 위해 3회 반복 측정하여 평균값을 적용합니다.<br>휴대폰을 조용한 곳에 두고 시작하세요.</p>
-                <button id="auto-calib-btn" class="primary-btn" style="width:100%">🚀 정밀 자동 보정 시작 (3회)</button>
-                
-                <div class="calib-divider">
-                    <span>또는 수동 입력</span>
-                </div>
-
+                <button id="auto-calib-btn" class="primary-btn" style="width:100%">🚀 정밀 자동 보정 (3회)</button>
+                <div class="calib-divider"><span>또는 수동 입력</span></div>
                 <div class="input-group" style="justify-content: center;">
-                    <input type="number" id="real-db-input" placeholder="예: 60" min="30" max="120">
-                    <span>dB (소음계 측정값)</span>
+                    <input type="number" id="real-db-input" placeholder="60" min="30" max="120"> dB
                 </div>
             </div>
-
             <div class="calib-step">
                 <span class="step-num">3</span>
-                <p>현재 웹 앱 측정값: <span id="current-raw-db">...</span> dBFS</p>
+                <p>현재값: <span id="current-raw-db">...</span> dBFS</p>
             </div>
-
             <div class="btn-group">
                 <button id="cancel-calib" class="secondary-btn">취소</button>
-                <button id="save-calib" class="primary-btn">보정값 저장</button>
+                <button id="save-calib" class="primary-btn">저장</button>
             </div>
         </div>
     </div>
 
-        <!-- Content Section for AdSense Quality (Expanded) -->
-        <article class="info-section">
-            <hr class="divider">
-            
-            <section class="content-block">
-                <h2>📢 온라인 소음 측정기 사용 가이드 및 층간소음 분석</h2>
-                <p>
-                    현대 사회에서 소음 공해는 삶의 질을 저하시키는 가장 큰 요인 중 하나입니다. 특히 아파트와 같은 공동주택에서의 층간소음, 도로변의 교통 소음, 그리고 공항 인근의 항공기 소음은 심각한 스트레스를 유발합니다.
-                    본 <strong>스마트 환경 소음 모니터</strong>는 별도의 고가 장비 없이, 여러분이 가진 PC나 스마트폰의 마이크만으로 현재 공간의 소음 수준을 과학적으로 측정하고 분석할 수 있도록 개발되었습니다.
-                </p>
-                <p>
-                    단순히 데시벨(dB) 수치만 보여주는 것이 아니라, 소리의 성분(주파수)을 분석하여 이것이 층간소음인지, 교통 소음인지 추정하는 기능과 함께, 배경 소음 대비 얼마나 충격적인 소음인지를 분석하는 <strong>Harmonica 지표</strong> 기술이 적용되어 있습니다.
-                </p>
-            </section>
-
-            <section class="content-block">
-                <h3>🛠️ 정확한 측정을 위한 3가지 팁</h3>
-                <p>
-                    웹 브라우저 기반의 소음 측정기는 기기마다 마이크 성능이 다르기 때문에, 더 정확한 결과를 얻기 위해서는 다음 단계를 따르는 것이 좋습니다.
-                </p>
-                <ol class="text-list">
-                    <li>
-                        <strong>마이크 보정(Calibration) 필수:</strong> 모든 마이크는 입력 감도가 다릅니다. 하단의 '마이크 보정' 버튼을 눌러, 조용한 환경에서 기준점을 잡아주세요. '정밀 자동 보정' 기능을 사용하면 3회 반복 측정을 통해 오차를 획기적으로 줄일 수 있습니다.
-                    </li>
-                    <li>
-                        <strong>측정 위치 선정:</strong> 기기를 바닥에 직접 두기보다는, 소음이 들리는 방향(예: 천장, 창문)을 향하게 하거나 테이블 위에 올려두는 것이 좋습니다. 바닥에 두면 불필요한 진동까지 소음으로 잡힐 수 있습니다.
-                    </li>
-                    <li>
-                        <strong>배경 소음 학습:</strong> '모니터링 시작' 후 약 30초 정도는 큰 소리를 내지 말고 기다려주세요. 알고리즘이 여러분 방의 기본 '배경 소음(Background Noise)' 수준을 학습해야, 이후 발생하는 '돌발 소음'을 정확히 감지할 수 있습니다.
-                    </li>
-                </ol>
-            </section>
-
-            <section class="content-block">
-                <h3>⚖️ 환경 소음의 법적 기준과 관리 요령</h3>
-                <p>
-                    "도대체 몇 데시벨부터 소음인가요?"라는 질문이 가장 많습니다. 대한민국 환경부와 국토교통부의 공동주택 층간소음 기준 및 환경 소음 기준을 알기 쉽게 풀어서 설명해 드립니다.
-                </p>
-                
-                <div class="standard-detail">
-                    <h4>1. 층간소음 (공동주택)</h4>
-                    <p>
-                        층간소음은 크게 <strong>'직접충격소음'</strong>(뛰는 소리, 발자국)과 <strong>'공기전달소음'</strong>(TV 소리, 악기)으로 나뉩니다.
-                        가장 흔한 '직접충격소음'의 경우, <strong>주간(06:00~22:00)에는 1분 등가소음도 39dB</strong>, <strong>야간(22:00~06:00)에는 34dB</strong>를 초과하면 법적 기준을 넘는 것으로 봅니다.
-                        본 앱의 '돌발 영향력' 수치가 이 기준을 지속적으로 넘는지 확인해보세요.
-                    </p>
-                </div>
-
-                <div class="standard-detail">
-                    <h4>2. 도로 및 철도 소음</h4>
-                    <p>
-                        도로변 주거지역의 경우, <strong>주간 68dB, 야간 58dB</strong>이 한도입니다. 철도의 경우 이보다 조금 높은 <strong>주간 70dB, 야간 60dB</strong>까지 허용됩니다.
-                        창문을 열었을 때 이 수치를 상시 초과한다면, 지자체에 방음벽 설치 등을 요구할 수 있는 근거 자료로 활용될 수 있습니다.
-                    </p>
-                </div>
-
-                <div class="standard-detail">
-                    <h4>3. 항공기 소음</h4>
-                    <p>
-                        항공기 소음은 순간적인 크기가 매우 크기 때문에 'WECPNL'이라는 별도의 단위를 쓰지만, 대략적으로 <strong>75dB 이상</strong>의 소음이 빈번하게 발생하면 피해보상 대상 지역에 해당할 가능성이 높습니다.
-                    </p>
-                </div>
-            </section>
-
-            <section class="content-block">
-                <h3>💡 자주 묻는 질문 (FAQ)</h3>
-                <dl class="faq-list">
-                    <dt>Q. 이 웹사이트의 측정값은 법적 효력이 있나요?</dt>
-                    <dd>
-                        A. 아닙니다. 본 서비스는 스마트폰/PC 마이크를 활용하므로 전문 소음계(Class 1, 2 등급)와 같은 정밀도를 보장하지 않으며, 법적 분쟁의 증거로 직접 사용할 수는 없습니다. 
-                        하지만 <strong>소음 피해 일지(Log)를 작성하거나, 전문 측정이 필요한 상황인지 판단하는 '참고 자료'</strong>로는 매우 유용합니다.
-                    </dd>
-
-                    <dt>Q. '돌발 영향력(Intrusiveness)'이 무엇인가요?</dt>
-                    <dd>
-                        A. 소음 불쾌감은 단순히 소리가 큰 것보다, <strong>'갑자기 튀어나오는 소리'</strong>일 때 더 심합니다. 
-                        이 앱은 전체 평균 소음($L_{eq}$)에서 배경 소음($L_{90}$)을 뺀 값을 계산하여, 실제 귀에 거슬리는 충격음의 크기를 '돌발 영향력'으로 보여줍니다.
-                    </dd>
-
-                    <dt>Q. 녹음된 파일은 어디에 저장되나요?</dt>
-                    <dd>
-                        A. 개인정보 보호를 위해 <strong>녹음된 파일은 서버로 전송되지 않고, 오직 사용자 기기의 브라우저 메모리에만 임시 저장</strong>됩니다.
-                        '다운로드' 버튼을 누르면 여러분의 컴퓨터나 폰으로 파일이 저장되며, 새로고침하면 모든 데이터는 사라집니다. 안심하고 사용하세요.
-                    </dd>
-                </dl>
-            </section>
-        </article>
-    </main>
-
-    <footer>
-        <div class="footer-content">
-            <p>&copy; 2024 Noise Monitor. All rights reserved.</p>
-            <div class="footer-links">
-                <a href="#" onclick="alert('개인정보처리방침: 본 서비스는 사용자의 오디오 데이터를 서버로 자동 전송하거나 저장하지 않습니다. 모든 오디오 처리는 브라우저 내에서 이루어지며, 녹음된 파일은 사용자의 기기에만 임시 저장(다운로드 가능)됩니다. 평가 데이터(점수, 시간, 태그)만 통계 목적으로 익명 저장됩니다.')">개인정보처리방침</a>
-                <a href="#">이용약관</a>
-                <a href="#" id="admin-mode-btn">관리자/실험 모드</a>
-            </div>
-            <p class="disclaimer">본 서비스는 법적 효력이 있는 측정 도구가 아닙니다. 정확한 측정은 전문 소음계(Sound Level Meter)를 사용하시기 바랍니다.</p>
-        </div>
-    </footer>
-
-    <!-- Admin/Experiment Modal -->
+    <!-- Admin Modal -->
     <div id="admin-modal" class="modal hidden">
-        <div class="modal-content" style="max-width: 600px;">
-            <h2>🛠️ 관리자 실험실 (Admin Lab)</h2>
-            <p class="desc">전문 소음계(SLM)와 웹 앱의 측정값을 비교하여<br>정밀도를 검증하고 오차를 분석합니다.</p>
-            
-            <div class="survey-section" style="background: #f5f5f5; padding: 15px; border-radius: 8px;">
-                <div class="input-group" style="justify-content: space-between; margin-bottom: 10px;">
-                    <label>📱 앱 측정값 (현재)</label>
-                    <span id="admin-app-db" style="font-weight:bold; font-size:1.2rem; color:var(--primary-color);">0.0</span> dB
+        <div class="modal-content">
+            <h2>🛠️ 관리자 실험실</h2>
+            <div class="survey-section" style="background: #f5f5f5; padding: 15px;">
+                <div class="input-group" style="justify-content: space-between;">
+                    <label>앱 측정값</label> <span id="admin-app-db" style="font-weight:bold;">0.0</span> dB
                 </div>
                 <div class="input-group" style="justify-content: space-between;">
-                    <label>📟 소음계 측정값 (입력)</label>
-                    <input type="number" id="admin-ref-db" placeholder="예: 65.5" style="width: 100px; font-size: 1.1rem;"> dB
+                    <label>기준값</label> <input type="number" id="admin-ref-db" placeholder="65.5"> dB
                 </div>
-                <button id="admin-log-btn" class="primary-btn" style="width:100%; margin-top:15px;">📊 데이터 기록 및 비교</button>
+                <button id="admin-log-btn" class="primary-btn" style="width:100%; margin-top:15px;">기록</button>
             </div>
-
-            <div class="data-log-section" style="margin-top: 20px; text-align: left;">
-                <h3>📋 비교 기록 (Log)</h3>
-                <div style="max-height: 200px; overflow-y: auto; font-size: 0.9rem; border: 1px solid #ddd;">
-                    <table style="width:100%; border-collapse: collapse;">
-                        <thead style="background: #eee;">
-                            <tr>
-                                <th style="padding:8px;">#</th>
-                                <th style="padding:8px;">App(dB)</th>
-                                <th style="padding:8px;">Ref(dB)</th>
-                                <th style="padding:8px;">오차</th>
-                            </tr>
-                        </thead>
-                        <tbody id="admin-log-table">
-                            <!-- Logs go here -->
-                        </tbody>
-                    </table>
-                </div>
-                <div class="stats-summary" style="margin-top: 10px; font-weight: bold; text-align: right;">
-                    평균 오차(MAE): <span id="admin-mae">0.0</span> dB
-                </div>
+            <div style="max-height: 200px; overflow-y: auto; margin-top:20px;">
+                <table style="width:100%">
+                    <tbody id="admin-log-table"></tbody>
+                </table>
             </div>
-
-            <button onclick="document.getElementById('admin-modal').classList.add('hidden')" class="secondary-btn" style="margin-top: 20px;">닫기</button>
+            <div style="text-align:right; margin-top:10px">MAE: <span id="admin-mae">0.0</span> dB</div>
+            <button onclick="document.getElementById('admin-modal').classList.add('hidden')" class="secondary-btn">닫기</button>
         </div>
     </div>
 
@@ -402,16 +359,12 @@
     <div id="evaluation-modal" class="modal hidden">
         <div class="modal-content">
             <h2>소음 평가 (EMA)</h2>
-            <p>방금 발생한 소음이 얼마나 거슬렸나요?</p>
-            
-            <div class="audio-preview-section" id="audio-preview-container" style="display:none; margin-bottom: 20px; padding: 15px; background: #f0f0f0; border-radius: 8px;">
-                <label style="display:block; margin-bottom:10px; font-weight:bold;">🎤 녹음된 소음 확인</label>
-                <audio id="noise-player" controls style="width:100%; margin-bottom:10px;"></audio>
-                <a id="download-recording" href="#" class="secondary-btn" style="display:inline-block; font-size:0.9rem; text-decoration:none;">💾 녹음 파일 다운로드</a>
+            <div class="audio-preview-section" id="audio-preview-container" style="display:none;">
+                <audio id="noise-player" controls style="width:100%"></audio>
+                <a id="download-recording" href="#" class="secondary-btn">💾 다운로드</a>
             </div>
-            
             <div class="survey-section">
-                <label>1. 불쾌감 정도 (1-10)</label>
+                <label>불쾌감 (1-10)</label>
                 <div class="rating-scale">
                     <button class="rate-btn" data-val="1">1</button>
                     <button class="rate-btn" data-val="2">2</button>
@@ -424,11 +377,9 @@
                     <button class="rate-btn" data-val="9">9</button>
                     <button class="rate-btn" data-val="10">10</button>
                 </div>
-                <div class="selected-rating">선택함: <span id="selected-val">-</span></div>
             </div>
-
             <div class="survey-section">
-                <label>2. 현재 활동 (Activity)</label>
+                <label>활동</label>
                 <div class="chip-group" id="activity-chips">
                     <button class="chip" data-type="activity" data-val="working">일/학습</button>
                     <button class="chip" data-type="activity" data-val="relaxing">휴식</button>
@@ -436,108 +387,63 @@
                     <button class="chip" data-type="activity" data-val="housework">가사</button>
                 </div>
             </div>
-
             <div class="survey-section">
-                <label>3. 정답 레이블링 (AI 학습 데이터용)</label>
+                <label>소음원(정답)</label>
                 <div class="chip-group" id="source-chips">
-                    <button class="chip" data-type="source" data-val="footsteps">층간소음(발소리)</button>
-                    <button class="chip" data-type="source" data-val="traffic">도로/차량</button>
-                    <button class="chip" data-type="source" data-val="aircraft">항공기</button>
-                    <button class="chip" data-type="source" data-val="train">철도/지하철</button>
-                    <button class="chip" data-type="source" data-val="construction">공사소음</button>
-                    <button class="chip" data-type="source" data-val="voice">사람/동물</button>
+                    <button class="chip" data-type="source" data-val="footsteps">층간소음</button>
+                    <button class="chip" data-type="source" data-val="traffic">도로</button>
+                    <button class="chip" data-type="source" data-val="aircraft">항공</button>
+                    <button class="chip" data-type="source" data-val="train">철도</button>
+                    <button class="chip" data-type="source" data-val="voice">사람</button>
                 </div>
             </div>
-
-            <button id="submit-eval" disabled>제출 및 계속하기</button>
+            <button id="submit-eval" disabled class="primary-btn" style="width:100%">제출</button>
         </div>
     </div>
 
-    <!-- Auth Modal (Simplified to Nickname) -->
+    <!-- Auth & Onboarding Modals -->
     <div id="auth-modal" class="modal hidden" style="z-index: 2000;">
-        <div class="modal-content" style="max-width: 400px;">
-            <h2>👋 환영합니다!</h2>
-            <p class="desc">서비스 이용을 위해 닉네임을 설정해주세요.</p>
-            
-            <form id="auth-form" style="margin-top: 20px;">
-                <div class="input-group" style="justify-content: center;">
-                    <input type="text" id="auth-nickname" placeholder="사용할 닉네임 입력" required style="width: 100%; padding: 12px; font-size: 1rem; text-align: center;">
-                </div>
-                
-                <button type="submit" id="btn-start" class="primary-btn" style="width: 100%; margin-top: 20px;">시작하기</button>
-            </form>
-        </div>
-    </div>
-
-    <!-- Onboarding Modal (User Info) -->
-    <div id="user-info-modal" class="modal">
         <div class="modal-content">
             <h2>👋 환영합니다!</h2>
-            <p class="desc">정확한 소음 분석을 위해<br>기본 환경 정보를 입력해주세요.</p>
-            
-            <div id="user-info-form">
-                <div class="survey-section">
-                    <label>🏠 거주 형태</label>
-                    <select id="housing-type" class="full-select">
-                        <option value="apartment">아파트</option>
-                        <option value="officetel">오피스텔</option>
-                        <option value="villa">빌라/다세대</option>
-                        <option value="house">단독주택</option>
-                    </select>
-                </div>
-
-                <div class="survey-section">
-                    <label>🏢 거주 층수</label>
-                    <select id="floor-level" class="full-select">
-                        <option value="low">저층 (1~3층)</option>
-                        <option value="mid">중층 (4~10층)</option>
-                        <option value="high">고층 (11층 이상)</option>
-                        <option value="top">최상층 (탑층)</option>
-                        <option value="semi-basement">반지하/지하</option>
-                    </select>
-                </div>
-
-                <div class="survey-section">
-                    <label>🌳 주변 환경 (주 소음원)</label>
-                    <select id="env-type" class="full-select">
-                        <option value="residential">일반 주택가 (조용함)</option>
-                        <option value="roadside">도로변 (차량 소음)</option>
-                        <option value="railway">철도/지하철 인근</option>
-                        <option value="construction">공사장/상가 인근</option>
-                        <option value="airport">공항/항로 인근</option>
-                    </select>
-                </div>
-
-                <button type="button" id="btn-save-info" onclick="saveUserInfo()" class="primary-btn" style="width:100%">입력 완료 및 시작</button>
-            </div>
-            <p class="algo-note" style="margin-top:15px">입력된 정보는 통계 분석용으로만 사용되며,<br>익명으로 안전하게 처리됩니다.</p>
+            <input type="text" id="auth-nickname" placeholder="닉네임 입력" style="width:100%; padding:10px; margin:20px 0;">
+            <button id="btn-start" class="primary-btn" style="width:100%">시작하기</button>
         </div>
     </div>
 
-    <!-- Permission Guide Modal -->
+    <div id="user-info-modal" class="modal hidden">
+        <div class="modal-content">
+            <h2>환경 정보</h2>
+            <div id="user-info-form">
+                <select id="housing-type" class="full-select">
+                    <option value="apartment">아파트</option>
+                    <option value="officetel">오피스텔</option>
+                    <option value="villa">빌라</option>
+                    <option value="house">주택</option>
+                </select>
+                <select id="floor-level" class="full-select">
+                    <option value="low">저층</option>
+                    <option value="mid">중층</option>
+                    <option value="high">고층</option>
+                </select>
+                <select id="env-type" class="full-select">
+                    <option value="residential">주택가</option>
+                    <option value="roadside">도로변</option>
+                    <option value="railway">철도변</option>
+                    <option value="airport">공항인근</option>
+                </select>
+                <button onclick="saveUserInfo()" class="primary-btn" style="width:100%; margin-top:20px;">완료</button>
+            </div>
+        </div>
+    </div>
+    
     <div id="permission-modal" class="modal hidden" style="z-index: 2000;">
         <div class="modal-content">
-            <h2 style="color:#f44336">⚠️ 마이크 권한 필요</h2>
-            <p>소음을 측정하기 위해 마이크 권한이 차단되었습니다.<br>아래 방법으로 권한을 허용해주세요.</p>
-            
-            <div style="text-align:left; background:#eee; padding:15px; border-radius:8px; margin:15px 0; font-size:0.9rem;">
-                <strong>해결 방법:</strong>
-                <ol style="margin:10px 0; padding-left:20px;">
-                    <li>브라우저 주소창 왼쪽의 <strong>🔒 자물쇠 아이콘</strong> 클릭</li>
-                    <li><strong>권한(Permissions)</strong> 또는 <strong>사이트 설정</strong> 클릭</li>
-                    <li>마이크(Microphone)를 <strong>'허용(Allow)'</strong>으로 변경</li>
-                    <li>페이지 <strong>새로고침</strong></li>
-                </ol>
-            </div>
-            
-            <button onclick="location.reload()" class="primary-btn" style="width:100%">확인 후 새로고침</button>
+            <h2>⚠️ 마이크 권한 필요</h2>
+            <p>브라우저 설정에서 마이크를 허용해주세요.</p>
+            <button onclick="location.reload()" class="primary-btn">새로고침</button>
         </div>
     </div>
 
-    <!-- Emergency Script for Onboarding -->
-    <script>
-    </script>
-
-    <script src="main.js?v=15"></script>
+    <script src="main.js?v=16"></script>
 </body>
 </html>
