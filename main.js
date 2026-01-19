@@ -191,15 +191,7 @@ const noisePlayer = document.getElementById('noise-player');
 const downloadLink = document.getElementById('download-recording');
 
 // Classifier Elements
-const classCards = {
-    floor: document.getElementById('type-floor'),
-    home: document.getElementById('type-home'),
-    road: document.getElementById('type-road'),
-    train: document.getElementById('type-train'),
-    air: document.getElementById('type-air')
-};
-
-// ...
+// Note: 'classCards' variable removed as it was using incorrect IDs. Elements are selected in updateInternalClassifierUI.
 
 // --- TensorFlow.js YAMNet Integration ---
 // 기존의 1/1 옥타브 밴드 분석을 경량화 딥러닝 모델(YAMNet)로 대체합니다.
@@ -425,8 +417,7 @@ function drawSpectrogram() {
 
   // Draw Octave Bars
   const bandWidth = (width / OCTAVE_BANDS.length) - 10;
-  const maxDbEstimate = 100; // Visual scaling factor
-
+  
   OCTAVE_BANDS.forEach((freq, index) => {
       const val = currentOctaveLevels[freq] || 0; // 0-255
       const percent = Math.min(1, val / 150); // Scale for visual
@@ -455,9 +446,6 @@ function drawSpectrogram() {
       }
   });
 }
-
-
-// ... rest of the code ...
 
 // Survey Elements
 const chipGroups = {
@@ -1293,11 +1281,12 @@ submitEvalBtn.addEventListener('click', async () => {
       context: { activity: surveyData.activity || 'unknown', source: surveyData.source || 'unknown' },
       userProfile: profile,
       userAgent: navigator.userAgent, 
-      timestamp: serverTimestamp()
+      timestamp: firebase.firestore.FieldValue.serverTimestamp() // Fixed: Using global firebase object
       // Note: We are not uploading the audio blob to Firestore here because it requires Storage setup.
       // The user can download it locally.
     };
-    await addDoc(collection(db, "noise_evaluations"), payload);
+    // Fixed: Using compat syntax
+    await db.collection("noise_evaluations").add(payload);
   } catch (err) { console.error(err); }
   hideEvaluationModal();
   lastEvalTime = Date.now();
@@ -1314,27 +1303,6 @@ submitEvalBtn.addEventListener('click', async () => {
   
   if (audioContext && audioContext.state === 'suspended') await audioContext.resume();
 });
-
-function drawSpectrogram() {
-  requestAnimationFrame(drawSpectrogram);
-  if (!isMonitoring || isPausedForEval) return;
-  const bufferLength = analyser.frequencyBinCount;
-  const dataArray = new Uint8Array(bufferLength);
-  analyser.getByteFrequencyData(dataArray);
-  tempCtx.drawImage(canvas, 0, 0, canvas.width, canvas.height);
-  const width = canvas.width;
-  const height = canvas.height;
-  canvasCtx.drawImage(canvas, -1, 0);
-  for (let i = 0; i < bufferLength; i++) {
-    const value = dataArray[i];
-    const percent = value / 255;
-    const hue = (1 - percent) * 240; 
-    canvasCtx.fillStyle = `hsl(${hue}, 100%, 50%)`;
-    const y = height - Math.floor((i / bufferLength) * height);
-    const h = Math.ceil(height / bufferLength); 
-    canvasCtx.fillRect(width - 1, y - h, 1, h);
-  }
-}
 
 function playPinkNoise() {
     if (!audioContext) return;
