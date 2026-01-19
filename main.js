@@ -960,99 +960,60 @@ function analyze() {
 
 // --- Advanced Analysis Function ---
 function updateAnalysis() {
-    if (dbBuffer.length < 50) return; // Need at least 5 seconds of data
+    if (dbBuffer.length < 10) return;
 
-    // 1. Calculate Statistics (Sorted for Percentiles)
     const sortedDb = [...dbBuffer].sort((a, b) => a - b);
-    const L90 = sortedDb[Math.floor(sortedDb.length * 0.1)]; // Background (Quiet 10%)
-    const L10 = sortedDb[Math.floor(sortedDb.length * 0.9)]; // Peak (Noisy 10%)
+    const L90 = sortedDb[Math.floor(sortedDb.length * 0.1)];
+    const L10 = sortedDb[Math.floor(sortedDb.length * 0.9)];
+    const maxDb = Math.max(...dbBuffer);
+    const minDb = Math.min(...dbBuffer);
     
-    // Calculate Leq (Logarithmic Average)
     let sumEnergy = 0;
     for (let db of dbBuffer) {
         sumEnergy += Math.pow(10, db / 10);
     }
     const Leq = 10 * Math.log10(sumEnergy / dbBuffer.length);
 
-    // 2. Metrics for Harmonica & Event Index
-    const eventImpact = Math.max(0, Leq - L90); // Component of noise due to events
-    const fluctuation = L10 - L90; // Intermittency Proxy
-    const intrusivenessRatio = (eventImpact / Math.max(1, Leq)) * 100; // % of total noise that is 'event'
-
-    // 3. Update UI Elements
+    // Update Detail View Elements
     const valL90 = document.getElementById('val-l90');
-    if (valL90) valL90.textContent = L90.toFixed(1);
-    
     const valEvent = document.getElementById('val-event');
-    if (valEvent) valEvent.textContent = eventImpact.toFixed(1);
-    
     const valIr = document.getElementById('val-ir');
-    if (valIr) valIr.textContent = fluctuation.toFixed(1); // Using Fluctuation as simplified IR
-
-    // Dynamic Descriptions (Academic/Scientific Context)
-    const descEvent = document.getElementById('desc-event');
-    const descIr = document.getElementById('desc-ir');
     
-    if (descEvent) {
-        if (eventImpact < 3) descEvent.textContent = "Low Salience (배경 소음 우세)";
-        else if (eventImpact < 8) descEvent.textContent = "Moderate Salience (이벤트 감지됨)";
-        else descEvent.textContent = "High Acoustic Salience (강한 돌발성, Harmonica Index↑)";
-    }
-    
-    if (descIr) {
-        if (fluctuation < 10) descIr.textContent = "Constant (시간적 구조 안정)";
-        else if (fluctuation < 30) descIr.textContent = "Fluctuating (일반적 변동)";
-        else descIr.textContent = "High Intermittency (높은 간헐성, DYNAMAP 기준)";
-    }
+    if (valL90) valL90.textContent = L90.toFixed(1);
+    if (valEvent) valEvent.textContent = (Leq - L90).toFixed(1);
+    if (valIr) valIr.textContent = (L10 - L90).toFixed(1);
 
-    // Harmonica 'Pencil' Visualization
-    const pencilWrapper = document.querySelector('.pencil-wrapper');
-    const pencilBody = document.getElementById('pencil-body');
-    const pencilTip = document.getElementById('pencil-tip');
-    const labelBody = document.getElementById('label-body');
-    const labelTip = document.getElementById('label-tip');
-
-    if (pencilWrapper && pencilBody && pencilTip) {
-        // Map dB to % (Scale: 0dB to 120dB)
-        const maxScale = 120;
-        const totalLeqPercent = Math.min(100, Math.max(0, (Leq / maxScale) * 100));
-        
-        // Width of the entire pencil (Total Leq)
-        pencilWrapper.style.width = `${totalLeqPercent}%`;
-        
-        // Inside the pencil: split between Body (L90) and Tip (Event)
-        // Ratio of Background to Total
-        const totalVal = Math.max(0.1, Leq); // Avoid divide by zero
-        const bodyPercent = (L90 / totalVal) * 100;
-        const tipPercent = 100 - bodyPercent;
-
-        pencilBody.style.width = `${bodyPercent}%`;
-        pencilTip.style.width = `${tipPercent}%`;
-        
-        // Update Labels inside pencil
-        if (labelBody) labelBody.textContent = L90.toFixed(0);
-        if (labelTip) labelTip.textContent = eventImpact > 1 ? `+${eventImpact.toFixed(0)}` : '';
-    }
-    
-    // 4. Generate Comment (Contextual Analysis)
+    // Update Analysis Comment (Sophisticated)
     const badge = document.getElementById('noise-badge');
     const comment = document.getElementById('analysis-comment');
     
     if (badge && comment) {
-        // Logic based on HARMONICA/DYNAMAP concepts
-        if (fluctuation < 5) {
-            badge.textContent = "Steady (지속음)";
-            badge.className = "badge steady";
-            comment.textContent = "변동이 적은 지속적인 소음입니다. (예: 냉장고, 멀리서 들리는 도로 소음)";
-        } else if (eventImpact > 10) {
-            badge.textContent = "Impulsive (충격음)";
+        let healthImpact = "안정적인 환경입니다.";
+        if (Leq > 70) {
+            healthImpact = "심한 소음 노출! 장시간 노출 시 청력 손상 및 강한 스트레스가 우려됩니다.";
             badge.className = "badge impulsive";
-            comment.textContent = `배경 소음보다 ${eventImpact.toFixed(0)}dB 높은 돌발 소음이 감지됩니다. 불쾌감이 클 수 있습니다. (예: 발소리, 물건 낙하)`;
-        } else {
-            badge.textContent = "Intermittent (간헐적)";
+            badge.textContent = "위험";
+        } else if (Leq > 55) {
+            healthImpact = "학습 및 집중에 방해가 되는 수준입니다. 휴식이 권장됩니다.";
             badge.className = "badge intermittent";
-            comment.textContent = "불규칙한 소음 변화가 감지됩니다. (예: 대화 소리, 가까운 TV 소리)";
+            badge.textContent = "주의";
+        } else {
+            badge.className = "badge steady";
+            badge.textContent = "정상";
         }
+        comment.innerHTML = `평균: <b>${Leq.toFixed(1)}dB</b> / 최대: <b>${maxDb.toFixed(1)}dB</b><br>${healthImpact}`;
+    }
+
+    // Update Pencil Visualization
+    const pencilWrapper = document.querySelector('.pencil-wrapper');
+    if (pencilWrapper) {
+        const totalLeqPercent = Math.min(100, Math.max(0, (Leq / 120) * 100));
+        pencilWrapper.style.width = `${totalLeqPercent}%`;
+        const bodyPercent = (L90 / Math.max(0.1, Leq)) * 100;
+        document.getElementById('pencil-body').style.width = `${bodyPercent}%`;
+        document.getElementById('pencil-tip').style.width = `${100 - bodyPercent}%`;
+        document.getElementById('label-body').textContent = L90.toFixed(0);
+        document.getElementById('label-tip').textContent = `+${(Leq - L90).toFixed(0)}`;
     }
 }
 
