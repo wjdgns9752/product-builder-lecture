@@ -388,13 +388,17 @@ async function setupAI(stream) {
     if(statusLabel) statusLabel.textContent = "⏳ AI 모델 로딩 중...";
     
     try {
-        // Load YAMNet
+        // Load YAMNet via the global 'yamnet' object provided by the script
         if (typeof yamnet !== 'undefined') {
             yamnetModel = await yamnet.load();
             if(statusLabel) statusLabel.textContent = "✅ AI 모델 가동 (YAMNet)";
             console.log("YAMNet Loaded successfully");
+        } else if (window['@tensorflow-models/yamnet']) {
+            yamnetModel = await window['@tensorflow-models/yamnet'].load();
+            if(statusLabel) statusLabel.textContent = "✅ AI 모델 가동 (YAMNet)";
         } else {
             if(statusLabel) statusLabel.textContent = "⚠️ 모델 로드 실패 (라이브러리 누락)";
+            console.error("YAMNet library not found in global scope");
         }
     } catch (e) {
         console.error("AI Setup Failed:", e);
@@ -412,7 +416,7 @@ function drawSpectrogram() {
   
   // Clear Canvas
   canvasCtx.clearRect(0, 0, width, height);
-  canvasCtx.fillStyle = '#f8f9fa';
+  canvasCtx.fillStyle = body.classList.contains('dark-mode') ? '#1e1e1e' : '#f8f9fa';
   canvasCtx.fillRect(0, 0, width, height);
 
   // Draw Octave Bars
@@ -421,10 +425,10 @@ function drawSpectrogram() {
   OCTAVE_BANDS.forEach((freq, index) => {
       const val = currentOctaveLevels[freq] || 0; // 0-255
       const percent = Math.min(1, val / 150); // Scale for visual
-      const barHeight = percent * height;
+      const barHeight = percent * (height - 20);
       
       const x = index * (width / OCTAVE_BANDS.length) + 5;
-      const y = height - barHeight;
+      const y = height - barHeight - 20;
 
       // Color based on intensity
       const hue = 120 - (percent * 120); // Green to Red
@@ -434,15 +438,15 @@ function drawSpectrogram() {
       canvasCtx.fillRect(x, y, bandWidth, barHeight);
 
       // Draw Label
-      canvasCtx.fillStyle = '#555';
-      canvasCtx.font = '12px Arial';
+      canvasCtx.fillStyle = body.classList.contains('dark-mode') ? '#aaa' : '#555';
+      canvasCtx.font = '10px Arial';
       canvasCtx.textAlign = 'center';
       canvasCtx.fillText(`${freq}Hz`, x + bandWidth/2, height - 5);
       
       // Draw Value
-      if (barHeight > 20) {
+      if (barHeight > 15) {
           canvasCtx.fillStyle = '#fff';
-          canvasCtx.fillText(val.toFixed(0), x + bandWidth/2, y + 15);
+          canvasCtx.fillText(val.toFixed(0), x + bandWidth/2, y + 12);
       }
   });
 }
@@ -1348,14 +1352,30 @@ navItems.forEach(nav => {
             else v.classList.remove('active');
         });
 
-        // Special Init for Map (Leaflet requires visible container)
-        if (targetId === 'view-map' && !mapInitialized) {
-            initMap();
+        // Special Init for Map
+        if (targetId === 'view-map') {
+            if (!mapInitialized) {
+                initMap();
+            } else if (map) {
+                setTimeout(() => {
+                    map.invalidateSize();
+                    updateUserLocation();
+                }, 100);
+            }
         }
         
-        // Trigger Map resize if already init
-        if (targetId === 'view-map' && map) {
-            setTimeout(() => map.invalidateSize(), 100);
+        // Special Init for Analysis
+        if (targetId === 'view-analysis') {
+            if (!doseChart) {
+                initDoseChart();
+            }
+            // Update analysis with current buffer data
+            updateAnalysis();
+            if (currentVolumeValue > 0) {
+                // Determine source for dose visuals update
+                // (Using the last detected or default to none)
+                updateDoseVisuals(currentVolumeValue, 'none'); 
+            }
         }
     });
 });
