@@ -619,6 +619,26 @@ thresholdSlider.addEventListener('input', (e) => {
 });
 
 // --- Audio Functions ---
+// Exposed globally for HTML onclick
+window.startMonitoring = async function() {
+    console.log("Start button clicked");
+    const btn = document.getElementById('init-btn');
+    btn.disabled = true;
+    btn.textContent = "⌛ 마이크 켜는 중...";
+
+    try {
+        const success = await startAudio();
+        if (!success) {
+            throw new Error("오디오 권한 획득 실패");
+        }
+    } catch (e) {
+        console.error("Critical Start Error:", e);
+        alert(`❌ 실행 오류: ${e.message}\n마이크 권한을 확인해주세요.`);
+        btn.disabled = false;
+        btn.textContent = "모니터링 시작";
+    }
+};
+
 async function startAudio() {
   try {
     if (audioContext && audioContext.state === 'closed') {
@@ -659,10 +679,6 @@ async function startAudio() {
 
     initBtn.style.display = 'none';
     recordBtn.classList.remove('hidden'); // Show record button
-    
-    if (audioContext.state === 'suspended') {
-        await audioContext.resume();
-    }
     
     if (!isMonitoring) {
         isMonitoring = true;
@@ -980,10 +996,10 @@ function renderAdminLogs() {
     adminMaeSpan.textContent = mae.toFixed(2);
 }
 
-// --- Audio Init Button ---
-initBtn.addEventListener('click', async () => {
-  await startAudio();
-});
+// --- Audio Init Button (Removed due to inline onclick) ---
+// initBtn.addEventListener('click', async () => {
+//   await startAudio();
+// });
 
 // --- Analysis Loop ---
 function analyze() {
