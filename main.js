@@ -385,52 +385,51 @@ function updateInternalClassifierUI(analysis) {
 
 async function setupAI(stream) {
     const statusLabel = document.getElementById('ai-loader');
-    if(statusLabel) statusLabel.textContent = "⏳ AI 시스템 초기화 준비 중...";
+    if(statusLabel) statusLabel.textContent = "⏳ AI 분석 모듈 연결 중...";
     
     try {
-        // 1. Wait for TFJS Engine
-        let tfReady = false;
+        // 1. Ensure Base TFJS Engine
         for (let i = 0; i < 20; i++) {
-            if (window.tf) {
-                tfReady = true;
-                break;
-            }
+            if (window.tf) break;
             await new Promise(r => setTimeout(r, 500));
         }
-        if (!tfReady) throw new Error("TFJS 엔진 로드 실패 (인터넷 차단)");
-
-        // 2. Performance Backend Setup
+        if (!window.tf) throw new Error("기본 연산 엔진(TFJS) 로드 실패");
         await tf.ready();
-        console.log("Using Backend:", tf.getBackend());
 
-        // 3. Robust YAMNet Search (Multi-path)
-        let yamnetLoader = null;
-        for (let i = 0; i < 20; i++) {
-            // Check all known export paths
-            yamnetLoader = window.yamnet || 
-                           (window['@tensorflow-models'] && window['@tensorflow-models'].yamnet) ||
+        // 2. Load YAMNet via Dynamic ESM Import (The most robust way)
+        if(statusLabel) statusLabel.textContent = "⏳ 라이브러리 직접 가져오기 중...";
+        
+        let yamnetModule;
+        try {
+            // Try to import as a module directly
+            yamnetModule = await import('https://cdn.jsdelivr.net/npm/@tensorflow-models/yamnet@1.0.0/+esm');
+        } catch (esmError) {
+            console.warn("ESM import failed, falling back to global search");
+            // Fallback to searching global if ESM fails
+            yamnetModule = window.yamnet || 
                            (window.tf && window.tf.models ? window.tf.models.yamnet : null);
-            
-            if (yamnetLoader) break;
-            await new Promise(r => setTimeout(r, 500));
-            console.log("Searching for YAMNet module...");
         }
 
-        if (!yamnetLoader) throw new Error("분석 모듈(YAMNet)을 시스템에서 찾을 수 없습니다.");
+        if (!yamnetModule) throw new Error("분석 도구를 불러올 수 없습니다. (지원되지 않는 브라우저)");
 
-        // 4. Load Model
-        if(statusLabel) statusLabel.textContent = "⏳ AI 분석 모델을 불러오는 중...";
-        yamnetModel = await yamnetLoader.load();
+        // 3. Load Model Data
+        if(statusLabel) statusLabel.textContent = "⏳ 소음 데이터베이스 로드 중 (3MB)...";
+        
+        // Some modules export 'load' directly, others as a property
+        const loadFn = yamnetModule.load || yamnetModule;
+        if (typeof loadFn !== 'function') throw new Error("분석 도구 형식이 올바르지 않습니다.");
+        
+        yamnetModel = await loadFn();
         
         if(statusLabel) {
             statusLabel.textContent = "✅ AI 소음 분석 준비 완료";
             statusLabel.style.color = "var(--primary-color)";
         }
+        console.log("AI setup completed via ESM/Hybrid");
     } catch (e) {
-        console.error("AI Setup Critical Error:", e);
-        const errorMsg = e.message || "알 수 없는 초기화 오류";
+        console.error("Critical AI Setup Error:", e);
         if(statusLabel) {
-            statusLabel.innerHTML = `⚠️ AI 로드 실패: ${errorMsg}<br><button onclick="location.reload()" style="background:var(--primary-color); color:white; border:none; padding:5px 10px; border-radius:4px; margin-top:5px;">페이지 새로고침</button>`;
+            statusLabel.innerHTML = `⚠️ AI 로드 실패: ${e.message}<br><button onclick="location.reload()" style="background:var(--primary-color); color:white; border:none; padding:5px 10px; border-radius:4px; margin-top:5px;">새로고침</button>`;
             statusLabel.style.color = "#f44336";
         }
     }
