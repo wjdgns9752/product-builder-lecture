@@ -385,42 +385,79 @@ function updateInternalClassifierUI(analysis) {
 
 async function setupAI(stream) {
     const statusLabel = document.getElementById('ai-loader');
-    if(statusLabel) statusLabel.textContent = "⏳ AI 엔진 라이브러리 대기 중...";
     
+    // Define fallback sources in order of preference
+    const sources = [
+        { name: "Main Server (0.0.1)", url: "https://cdn.jsdelivr.net/npm/@tensorflow-models/yamnet@0.0.1/dist/yamnet.min.js" },
+        { name: "Backup Server 1 (0.0.1)", url: "https://unpkg.com/@tensorflow-models/yamnet@0.0.1/dist/yamnet.min.js" },
+        { name: "Backup Server 2 (1.0.0)", url: "https://cdn.jsdelivr.net/npm/@tensorflow-models/yamnet@1.0.0/dist/yamnet.min.js" }
+    ];
+
+    const loadScript = (src) => {
+        return new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = src;
+            script.crossOrigin = "anonymous"; // Fix CORS issues
+            script.onload = () => resolve(true);
+            script.onerror = () => reject(new Error(`Failed to load ${src}`));
+            document.head.appendChild(script);
+        });
+    };
+
     try {
         // 1. Wait for TFJS
+        if(statusLabel) statusLabel.textContent = "⏳ 기본 엔진(TFJS) 확인 중...";
+        let tfReady = false;
+        for(let i=0; i<20; i++) {
+            if(window.tf) { tfReady = true; break; }
+            await new Promise(r => setTimeout(r, 200));
+        }
+        if(!tfReady) throw new Error("기본 엔진(TFJS)을 찾을 수 없습니다.");
         await tf.ready();
 
-        // 2. Simple Wait for Global YAMNet (0.0.1 always exposes this)
-        let loader = null;
-        for (let i = 0; i < 40; i++) { // Wait 20 seconds max
-            if (window.yamnet) {
-                loader = window.yamnet;
-                break;
+        // 2. Cascade Loading for YAMNet
+        let yamnetLoaded = false;
+        
+        // Check if already loaded
+        if (window.yamnet) yamnetLoaded = true;
+
+        if (!yamnetLoaded) {
+            for (const source of sources) {
+                if(statusLabel) statusLabel.textContent = `⏳ 연결 시도: ${source.name}...`;
+                console.log(`Attempting to load YAMNet from: ${source.name}`);
+                
+                try {
+                    await loadScript(source.url);
+                    // Verify object existence
+                    if (window.yamnet || (window.tf && window.tf.models && window.tf.models.yamnet)) {
+                        yamnetLoaded = true;
+                        console.log(`Success: Loaded from ${source.name}`);
+                        break; // Stop loop on success
+                    }
+                } catch (err) {
+                    console.warn(`Failed: ${source.name}`, err);
+                }
             }
-            await new Promise(r => setTimeout(r, 500));
         }
 
-        if (!loader) {
-            // Last ditch effort: Check if it's hidden in tf.models
-            if (tf.models && tf.models.yamnet) loader = tf.models.yamnet;
-        }
-
-        if (!loader) throw new Error("YAMNet 라이브러리가 로드되지 않았습니다. (서버 연결 실패)");
+        if (!yamnetLoaded) throw new Error("모든 서버 연결에 실패했습니다. (방화벽/네트워크 확인)");
 
         // 3. Load Model
-        if(statusLabel) statusLabel.textContent = "⏳ AI 모델 다운로드 중...";
+        const loader = window.yamnet || (window.tf.models ? window.tf.models.yamnet : null);
+        if(statusLabel) statusLabel.textContent = "⏳ AI 데이터 다운로드 중...";
+        
         yamnetModel = await loader.load();
         
         if(statusLabel) {
             statusLabel.textContent = "✅ AI 소음 분석 준비 완료";
             statusLabel.style.color = "var(--primary-color)";
         }
-        console.log("AI setup successful (v0.0.1)");
+        console.log("AI Setup Complete");
+
     } catch (e) {
-        console.error("AI Setup Critical Error:", e);
+        console.error("AI Setup Fatal Error:", e);
         if(statusLabel) {
-            statusLabel.innerHTML = `⚠️ AI 로드 실패: ${e.message}<br><button onclick="location.reload()" style="background:var(--primary-color); color:white; border:none; padding:5px 10px; border-radius:4px; margin-top:5px;">새로고침</button>`;
+            statusLabel.innerHTML = `⚠️ 오류: ${e.message}<br><button onclick="location.reload()" style="background:#333; color:white; border:none; padding:5px 10px; border-radius:4px; margin-top:5px; cursor:pointer;">다시 시도</button>`;
             statusLabel.style.color = "#f44336";
         }
     }
