@@ -49,6 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // DOM Elements
 const initBtn = document.getElementById('init-btn');
 const recordBtn = document.getElementById('record-btn');
+const quickCalibBtn = document.getElementById('quick-calib-btn');
 const meterBar = document.getElementById('meter-bar');
 const bgMarker = document.getElementById('bg-marker');
 const currentVolSpan = document.getElementById('current-vol');
@@ -292,71 +293,7 @@ function processAudioForModel(timeData, originalSampleRate) {
     }
 }
 
-async function analyzeNoiseCharacteristics() {
-    if (!yamnetModel || isModelProcessing || yamnetAudioBuffer.length < YAMNET_INPUT_SIZE) {
-        return { label: 'none', score: 0 };
-    }
 
-    isModelProcessing = true;
-    try {
-        // Take the last ~1 second of data
-        const inputData = yamnetAudioBuffer.slice(yamnetAudioBuffer.length - YAMNET_INPUT_SIZE);
-        
-        // Run Inference
-        const results = yamnetModel.predict(inputData);
-        const scores = await results[0].data(); // Class scores
-        const classNames = yamnetModel.classNames; // Get labels via model property if available, or we might need to map manualy. 
-        // Note: yamnet.load() returns a model where we can use predict directly. 
-        // The official TFJS YAMNet returns [scores, embeddings, spectrogram].
-
-        // Find top class
-        const topIndices = Array.from(scores)
-            .map((s, i) => ({ score: s, index: i }))
-            .sort((a, b) => b.score - a.score)
-            .slice(0, 5); // Top 5 candidates
-
-        // Map to our Categories
-        let bestLabel = 'none';
-        let bestScore = 0;
-
-        for (let item of topIndices) {
-            const rawLabel = classNames[item.index].toLowerCase();
-            
-            for (const [category, keywords] of Object.entries(CLASS_MAPPING)) {
-                if (keywords.some(k => rawLabel.includes(k))) {
-                    if (item.score > bestScore) {
-                        bestScore = item.score;
-                        bestLabel = category;
-                    }
-                }
-            }
-        }
-        
-        // Threshold
-        if (bestScore < 0.2) bestLabel = 'none';
-
-        // UI Mapping
-        let uiLabel = 'none';
-        switch(bestLabel) {
-            case 'floor': uiLabel = 'Floor Impact'; break;
-            case 'road': uiLabel = 'Road Traffic'; break;
-            case 'home': uiLabel = 'Household'; break;
-            case 'train': uiLabel = 'Train'; break; // Not in original return but valid
-            case 'air': uiLabel = 'Air'; break;     // Not in original return but valid
-            default: uiLabel = 'none';
-        }
-
-        tf.dispose(results);
-        isModelProcessing = false;
-        
-        return { label: uiLabel, score: bestScore };
-
-    } catch (e) {
-        console.error("YAMNet inference error:", e);
-        isModelProcessing = false;
-        return { label: 'none', score: 0 };
-    }
-}
 
 function updateInternalClassifierUI(analysis) {
     const resultText = document.getElementById('ai-result-text');
@@ -782,6 +719,7 @@ async function startAudio() {
 
     initBtn.style.display = 'none';
     recordBtn.classList.remove('hidden'); // Show record button
+    if(quickCalibBtn) quickCalibBtn.classList.remove('hidden');
     
     if (!isMonitoring) {
         isMonitoring = true;
@@ -824,6 +762,7 @@ async function startAudio() {
             microphone.connect(analyser);
         }
         initBtn.style.display = 'none';
+        if(quickCalibBtn) quickCalibBtn.classList.remove('hidden');
         
         if (!isMonitoring) {
             isMonitoring = true;
