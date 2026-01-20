@@ -385,25 +385,29 @@ function updateInternalClassifierUI(analysis) {
 
 async function setupAI(stream) {
     const statusLabel = document.getElementById('ai-loader');
-    if(statusLabel) statusLabel.textContent = "⏳ AI 엔진 초기화 중...";
+    if(statusLabel) statusLabel.textContent = "⏳ AI 엔진 확인 중...";
+    
+    // Retry logic to wait for library loading
+    let loader = null;
+    for (let i = 0; i < 10; i++) { // Try for 5 seconds
+        loader = window.yamnet || (window.tf && window.tf.models ? window.tf.models.yamnet : null);
+        if (loader) break;
+        await new Promise(r => setTimeout(r, 500));
+        console.log(`Waiting for YAMNet library... (${i+1}/10)`);
+    }
     
     try {
-        // Multi-layered robust loader
-        let loader = window.yamnet;
-        if (!loader && window['@tensorflow-models/yamnet']) {
-            loader = window['@tensorflow-models/yamnet'];
-        }
-        
         if (loader) {
+            if(statusLabel) statusLabel.textContent = "⏳ AI 모델 로딩 중...";
             yamnetModel = await loader.load();
             if(statusLabel) statusLabel.textContent = "✅ AI 소음 분석 준비 완료";
             console.log("YAMNet successfully initialized");
         } else {
-            throw new Error("YAMNet library not found in global scope");
+            throw new Error("YAMNet library not found after waiting");
         }
     } catch (e) {
         console.error("AI Setup Failed:", e);
-        if(statusLabel) statusLabel.textContent = "⚠️ AI 모드 사용 불가 (라이브러리 확인 필요)";
+        if(statusLabel) statusLabel.textContent = "⚠️ AI 로드 실패 (새로고침 권장)";
     }
     return true;
 }
