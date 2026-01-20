@@ -425,56 +425,38 @@ const YAMNET_CLASSES = [
 let noiseHistory = [];
 let aiSkipMode = false;
 
+// --- Global Calibration Function ---
+window.startCalibration = async function() {
+    console.log("Calibration Button Clicked");
+    if (!audioContext) await startAudio();
+    
+    const modal = document.getElementById('calibration-modal');
+    if(modal) {
+        modal.classList.remove('hidden');
+        modal.style.display = 'flex';
+    } else {
+        alert("보정 화면을 불러올 수 없습니다.");
+    }
+};
+
 async function setupAI(stream) {
     const sysBar = document.getElementById('system-status-bar');
     const sysMsg = document.getElementById('sys-msg');
-    const skipBtn = document.getElementById('btn-skip-ai');
     
-    if(sysBar) { sysBar.style.display = 'flex'; }
+    if(sysBar) sysBar.style.display = 'flex';
     if(sysMsg) sysMsg.textContent = "⏳ AI 엔진 준비 중...";
 
-    // Skip Button Logic
-    if(skipBtn) {
-        skipBtn.onclick = () => {
-            aiSkipMode = true;
-            if(sysBar) sysBar.style.display = 'none';
-        };
-    }
-
     try {
-        // Simple Wait Logic with Rescue
+        // Simple Wait Logic (Restored to the working version)
         let loader = null;
-        let attempts = 0;
-        
-        // Rescue Loader Function
-        const loadRescueScript = (url) => {
-            console.log("Injecting rescue script:", url);
-            const s = document.createElement('script');
-            s.src = url;
-            document.head.appendChild(s);
-        };
-
-        for(let i=0; i<60; i++) { // Wait 30s max
+        for(let i=0; i<40; i++) { // Wait 20s
             if(aiSkipMode) return true;
-            
             loader = window.yamnet || (window.tf && window.tf.models ? window.tf.models.yamnet : null);
             if(loader) break;
-
-            // Trigger Rescue after 3 seconds (approx 6 attempts)
-            if (i === 6) {
-                if(sysMsg) sysMsg.textContent = "⏳ 보조 서버 연결 시도...";
-                loadRescueScript("https://unpkg.com/@tensorflow-models/yamnet@0.0.1/dist/yamnet.min.js");
-            }
-            
-            // Trigger 2nd Rescue after 10 seconds
-            if (i === 20) {
-                loadRescueScript("https://cdn.jsdelivr.net/npm/@tensorflow-models/yamnet@0.0.1/dist/yamnet.min.js");
-            }
-
             await new Promise(r => setTimeout(r, 500));
         }
 
-        if (!loader) throw new Error("엔진 로드 시간 초과");
+        if (!loader) throw new Error("엔진 로드 실패 (네트워크 확인)");
 
         if(sysMsg) sysMsg.textContent = "⏳ 모델 초기화 중...";
         yamnetModel = await loader.load();
@@ -492,28 +474,7 @@ async function setupAI(stream) {
     return true;
 }
 
-// Restore Calibration Button Logic
-document.addEventListener('DOMContentLoaded', () => {
-    const calibBtn = document.getElementById('calibration-btn');
-    const calibModal = document.getElementById('calibration-modal');
-    const closeCalibBtn = document.getElementById('cancel-calib');
-    
-    if (calibBtn && calibModal) {
-        calibBtn.addEventListener('click', async () => {
-            console.log("Calibration clicked");
-            if (!audioContext) await startAudio();
-            calibModal.classList.remove('hidden');
-            calibModal.style.display = 'flex';
-        });
-    }
-    
-    if(closeCalibBtn && calibModal) {
-        closeCalibBtn.addEventListener('click', () => {
-            calibModal.classList.add('hidden');
-            calibModal.style.display = 'none';
-        });
-    }
-});
+// (Removed old DOMContentLoaded listener for calibration to avoid conflicts)
 
 // Custom Audio Preprocessing for raw GraphModel
 async function analyzeNoiseCharacteristics() {
