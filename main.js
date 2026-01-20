@@ -385,51 +385,41 @@ function updateInternalClassifierUI(analysis) {
 
 async function setupAI(stream) {
     const statusLabel = document.getElementById('ai-loader');
-    if(statusLabel) statusLabel.textContent = "⏳ AI 엔진 가동 중...";
+    if(statusLabel) statusLabel.textContent = "⏳ AI 엔진 초기화 중...";
     
     try {
-        // 1. Check for TFJS (Loaded locally)
+        // 1. Wait for TFJS (Local)
         let retry = 0;
-        while (!window.tf && retry < 10) {
+        while (!window.tf && retry < 20) {
             await new Promise(r => setTimeout(r, 200));
             retry++;
         }
-        if (!window.tf) throw new Error("엔진 파일(tf.min.js) 로드 실패");
-        
+        if (!window.tf) throw new Error("TFJS 엔진 로드 실패");
         await tf.ready();
 
-        // 2. Check for YAMNet (Loaded locally)
-        retry = 0;
-        while (!window.yamnet && retry < 10) {
-            await new Promise(r => setTimeout(r, 200));
-            retry++;
+        // 2. Wait for YAMNet (CDN)
+        let loader = null;
+        for (let i = 0; i < 30; i++) { // Wait 15 seconds for CDN
+            loader = window.yamnet || (window.tf.models ? window.tf.models.yamnet : null);
+            if (loader) break;
+            await new Promise(r => setTimeout(r, 500));
         }
-        
-        const loader = window.yamnet || (window.tf.models ? window.tf.models.yamnet : null);
-        if (!loader) throw new Error("분석 파일(yamnet.min.js) 로드 실패");
 
-        // 3. Load Model Data
-        // Note: The model weights are still fetched from Google Storage by the library.
-        // If this fails, it means the network blocks all Google Storage access.
-        if(statusLabel) statusLabel.textContent = "⏳ 분석 모델 데이터 읽는 중...";
-        
+        if (!loader) throw new Error("YAMNet 라이브러리 연결 시간 초과");
+
+        // 3. Load Model
+        if(statusLabel) statusLabel.textContent = "⏳ 분석 모델 다운로드 중...";
         yamnetModel = await loader.load();
         
         if(statusLabel) {
             statusLabel.textContent = "✅ AI 소음 분석 준비 완료";
             statusLabel.style.color = "var(--primary-color)";
         }
-        console.log("AI Setup Complete (Local Mode)");
-
     } catch (e) {
-        console.error("AI Setup Fatal Error:", e);
+        console.error("AI Setup Error:", e);
         if(statusLabel) {
-            statusLabel.innerHTML = `
-                <div style="color:#d32f2f; background:#ffebee; padding:10px; border-radius:8px; font-size:0.85rem;">
-                    <strong>⚠️ 치명적 오류: ${e.message}</strong><br>
-                    내부 엔진 파일이 손상되었거나 로드되지 않았습니다.<br>
-                    <a href="#" onclick="location.reload()" style="font-weight:bold;">새로고침</a>
-                </div>`;
+            statusLabel.innerHTML = `⚠️ 오류: ${e.message}<br><button onclick="location.reload()" style="background:var(--primary-color); color:white; border:none; padding:5px 10px; border-radius:4px; margin-top:5px;">새로고침</button>`;
+            statusLabel.style.color = "#f44336";
         }
     }
     return true;
