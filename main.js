@@ -387,6 +387,9 @@ async function setupAI(stream) {
     const statusLabel = document.getElementById('ai-loader');
     if(statusLabel) statusLabel.textContent = "⏳ AI 엔진 초기화 중...";
     
+    // Backup URL in case primary fails
+    const backupUrl = "https://unpkg.com/@tensorflow-models/yamnet@0.0.1/dist/yamnet.min.js";
+
     try {
         // 1. Wait for TFJS (Local)
         let retry = 0;
@@ -397,15 +400,29 @@ async function setupAI(stream) {
         if (!window.tf) throw new Error("TFJS 엔진 로드 실패");
         await tf.ready();
 
-        // 2. Wait for YAMNet (CDN)
+        // 2. Wait for YAMNet with Rescue Injection
         let loader = null;
-        for (let i = 0; i < 30; i++) { // Wait 15 seconds for CDN
+        let attempt = 0;
+        const maxAttempts = 60; // 30 seconds
+
+        while (attempt < maxAttempts) {
             loader = window.yamnet || (window.tf.models ? window.tf.models.yamnet : null);
             if (loader) break;
+
+            // Trigger Rescue Injection after 3 seconds
+            if (attempt === 6) {
+                console.log("Main CDN slow, injecting backup...");
+                if(statusLabel) statusLabel.textContent = "⏳ 보조 서버 연결 시도 중...";
+                const script = document.createElement('script');
+                script.src = backupUrl;
+                document.head.appendChild(script);
+            }
+
             await new Promise(r => setTimeout(r, 500));
+            attempt++;
         }
 
-        if (!loader) throw new Error("YAMNet 라이브러리 연결 시간 초과");
+        if (!loader) throw new Error("네트워크 보안으로 인해 AI 라이브러리가 차단되었습니다.");
 
         // 3. Load Model
         if(statusLabel) statusLabel.textContent = "⏳ 분석 모델 다운로드 중...";
@@ -415,6 +432,8 @@ async function setupAI(stream) {
             statusLabel.textContent = "✅ AI 소음 분석 준비 완료";
             statusLabel.style.color = "var(--primary-color)";
         }
+        console.log("AI Setup Success");
+
     } catch (e) {
         console.error("AI Setup Error:", e);
         if(statusLabel) {
