@@ -385,24 +385,25 @@ function updateInternalClassifierUI(analysis) {
 
 async function setupAI(stream) {
     const statusLabel = document.getElementById('ai-loader');
-    if(statusLabel) statusLabel.textContent = "⏳ AI 모델 로딩 중...";
+    if(statusLabel) statusLabel.textContent = "⏳ AI 엔진 초기화 중...";
     
     try {
-        // Load YAMNet via the global 'yamnet' object provided by the script
-        if (typeof yamnet !== 'undefined') {
-            yamnetModel = await yamnet.load();
-            if(statusLabel) statusLabel.textContent = "✅ AI 모델 가동 (YAMNet)";
-            console.log("YAMNet Loaded successfully");
-        } else if (window['@tensorflow-models/yamnet']) {
-            yamnetModel = await window['@tensorflow-models/yamnet'].load();
-            if(statusLabel) statusLabel.textContent = "✅ AI 모델 가동 (YAMNet)";
+        // Multi-layered robust loader
+        let loader = window.yamnet;
+        if (!loader && window['@tensorflow-models/yamnet']) {
+            loader = window['@tensorflow-models/yamnet'];
+        }
+        
+        if (loader) {
+            yamnetModel = await loader.load();
+            if(statusLabel) statusLabel.textContent = "✅ AI 소음 분석 준비 완료";
+            console.log("YAMNet successfully initialized");
         } else {
-            if(statusLabel) statusLabel.textContent = "⚠️ 모델 로드 실패 (라이브러리 누락)";
-            console.error("YAMNet library not found in global scope");
+            throw new Error("YAMNet library not found in global scope");
         }
     } catch (e) {
         console.error("AI Setup Failed:", e);
-        if(statusLabel) statusLabel.textContent = "❌ AI 초기화 오류";
+        if(statusLabel) statusLabel.textContent = "⚠️ AI 모드 사용 불가 (라이브러리 확인 필요)";
     }
     return true;
 }
@@ -411,44 +412,62 @@ function drawSpectrogram() {
   requestAnimationFrame(drawSpectrogram);
   if (!isMonitoring || isPausedForEval) return;
 
+  const bufferLength = analyser.frequencyBinCount;
+  const dataArray = new Uint8Array(bufferLength);
+  analyser.getByteFrequencyData(dataArray);
+
   const width = canvas.width;
   const height = canvas.height;
+
+  // Move the existing image to the left
+  tempCtx.drawImage(canvas, -1, 0);
   
-  // Clear Canvas
+  // Draw new frequency data at the right edge
+  for (let i = 0; i < bufferLength; i++) {
+    const value = dataArray[i];
+    const percent = value / 255;
+    const hue = (1 - percent) * 240; 
+    tempCtx.fillStyle = `hsl(${hue}, 100%, 50%)`;
+    
+    // Scale height to focus on audible range
+    const y = height - (i / (bufferLength / 2)) * height;
+    tempCtx.fillRect(width - 1, y, 1, 2);
+  }
+  
   canvasCtx.clearRect(0, 0, width, height);
-  canvasCtx.fillStyle = body.classList.contains('dark-mode') ? '#1e1e1e' : '#f8f9fa';
-  canvasCtx.fillRect(0, 0, width, height);
+  canvasCtx.drawImage(tempCanvas, 0, 0);
+}
 
-  // Draw Octave Bars
-  const bandWidth = (width / OCTAVE_BANDS.length) - 10;
-  
-  OCTAVE_BANDS.forEach((freq, index) => {
-      const val = currentOctaveLevels[freq] || 0; // 0-255
-      const percent = Math.min(1, val / 150); // Scale for visual
-      const barHeight = percent * (height - 20);
-      
-      const x = index * (width / OCTAVE_BANDS.length) + 5;
-      const y = height - barHeight - 20;
-
-      // Color based on intensity
-      const hue = 120 - (percent * 120); // Green to Red
-      canvasCtx.fillStyle = `hsl(${hue}, 80%, 50%)`;
-      
-      // Draw Bar
-      canvasCtx.fillRect(x, y, bandWidth, barHeight);
-
-      // Draw Label
-      canvasCtx.fillStyle = body.classList.contains('dark-mode') ? '#aaa' : '#555';
-      canvasCtx.font = '10px Arial';
-      canvasCtx.textAlign = 'center';
-      canvasCtx.fillText(`${freq}Hz`, x + bandWidth/2, height - 5);
-      
-      // Draw Value
-      if (barHeight > 15) {
-          canvasCtx.fillStyle = '#fff';
-          canvasCtx.fillText(val.toFixed(0), x + bandWidth/2, y + 12);
-      }
-  });
+// Automatic Noise Mapping Logic
+let lastMapRecordTime = 0;
+function autoRecordToMap() {
+    if (!isMonitoring || !map || Date.now() - lastMapRecordTime < 5000) return;
+    
+    navigator.geolocation.getCurrentPosition((pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        
+        const timestamp = new Date().toLocaleTimeString();
+        let color = currentVolumeValue > 65 ? '#f44336' : (currentVolumeValue > 50 ? '#ffeb3b' : '#4caf50');
+        
+        const marker = L.circleMarker([lat, lng], {
+            radius: 8,
+            fillColor: color,
+            color: "#fff",
+            weight: 2,
+            opacity: 1,
+            fillOpacity: 0.8
+        }).addTo(map);
+        
+        marker.bindPopup(`<b>${currentVolumeValue.toFixed(1)} dB</b><br>시간: ${timestamp}`);
+        noiseHistory.push({ lat, lng, db: currentVolumeValue, marker });
+        
+        if (noiseHistory.length > 50) {
+            const old = noiseHistory.shift();
+            map.removeLayer(old.marker);
+        }
+        lastMapRecordTime = Date.now();
+    }, null, { enableHighAccuracy: true });
 }
 
 // Survey Elements
@@ -947,10 +966,11 @@ function analyze() {
   dbBuffer.push(calibratedDb);
   if (dbBuffer.length > BUFFER_SIZE) dbBuffer.shift();
 
-  // Run Advanced Analysis every 500ms
+  // Run Advanced Analysis & Auto Map every 500ms
   const now = Date.now();
   if (now - lastAnalysisTime > 500) {
       updateAnalysis();
+      autoRecordToMap(); // Enable automatic mapping
       lastAnalysisTime = now;
   }
 
