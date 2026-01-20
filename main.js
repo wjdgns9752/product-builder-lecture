@@ -386,65 +386,65 @@ function updateInternalClassifierUI(analysis) {
 async function setupAI(stream) {
     const statusLabel = document.getElementById('ai-loader');
     
-    // Define fallback sources in order of preference
+    // Ultimate Fallback List (4 Major CDNs)
     const sources = [
-        { name: "Main Server (0.0.1)", url: "https://cdn.jsdelivr.net/npm/@tensorflow-models/yamnet@0.0.1/dist/yamnet.min.js" },
-        { name: "Backup Server 1 (0.0.1)", url: "https://unpkg.com/@tensorflow-models/yamnet@0.0.1/dist/yamnet.min.js" },
-        { name: "Backup Server 2 (1.0.0)", url: "https://cdn.jsdelivr.net/npm/@tensorflow-models/yamnet@1.0.0/dist/yamnet.min.js" }
+        { name: "Server A (jsDelivr)", url: "https://cdn.jsdelivr.net/npm/@tensorflow-models/yamnet@0.0.1/dist/yamnet.min.js" },
+        { name: "Server B (Unpkg)", url: "https://unpkg.com/@tensorflow-models/yamnet@0.0.1/dist/yamnet.min.js" },
+        { name: "Server C (Cloudflare)", url: "https://cdnjs.cloudflare.com/ajax/libs/tensorflow-models-yamnet/0.0.1/yamnet.min.js" }, // Note: Placeholder if cdnjs adds it, but mainly trying alternates
+        { name: "Server D (Latest)", url: "https://cdn.jsdelivr.net/npm/@tensorflow-models/yamnet" } // Direct module mapping
     ];
 
     const loadScript = (src) => {
         return new Promise((resolve, reject) => {
             const script = document.createElement('script');
             script.src = src;
-            script.crossOrigin = "anonymous"; // Fix CORS issues
+            // Removed crossOrigin to prevent strict CORS blocking on mobile
             script.onload = () => resolve(true);
-            script.onerror = () => reject(new Error(`Failed to load ${src}`));
+            script.onerror = () => reject(new Error(`Load failed`));
             document.head.appendChild(script);
         });
     };
 
     try {
         // 1. Wait for TFJS
-        if(statusLabel) statusLabel.textContent = "⏳ 기본 엔진(TFJS) 확인 중...";
+        if(statusLabel) statusLabel.textContent = "⏳ 기본 엔진(TFJS) 준비 중...";
         let tfReady = false;
-        for(let i=0; i<20; i++) {
+        for(let i=0; i<30; i++) {
             if(window.tf) { tfReady = true; break; }
             await new Promise(r => setTimeout(r, 200));
         }
-        if(!tfReady) throw new Error("기본 엔진(TFJS)을 찾을 수 없습니다.");
-        await tf.ready();
+        if(!tfReady) throw new Error("기본 엔진(TFJS)이 차단되었습니다.");
+        
+        // Optimize backend for mobile to prevent crash
+        try { await tf.setBackend('cpu'); await tf.ready(); } catch(e) {} 
 
         // 2. Cascade Loading for YAMNet
         let yamnetLoaded = false;
-        
-        // Check if already loaded
         if (window.yamnet) yamnetLoaded = true;
 
         if (!yamnetLoaded) {
             for (const source of sources) {
-                if(statusLabel) statusLabel.textContent = `⏳ 연결 시도: ${source.name}...`;
-                console.log(`Attempting to load YAMNet from: ${source.name}`);
+                if(statusLabel) statusLabel.textContent = `📡 연결 시도: ${source.name}`;
+                console.log(`Trying ${source.name}...`);
                 
                 try {
                     await loadScript(source.url);
-                    // Verify object existence
+                    // Check Global Object
                     if (window.yamnet || (window.tf && window.tf.models && window.tf.models.yamnet)) {
                         yamnetLoaded = true;
-                        console.log(`Success: Loaded from ${source.name}`);
-                        break; // Stop loop on success
+                        break;
                     }
                 } catch (err) {
-                    console.warn(`Failed: ${source.name}`, err);
+                    console.warn(`Failed: ${source.name}`);
                 }
             }
         }
 
-        if (!yamnetLoaded) throw new Error("모든 서버 연결에 실패했습니다. (방화벽/네트워크 확인)");
+        if (!yamnetLoaded) throw new Error("모든 서버 연결 실패");
 
         // 3. Load Model
         const loader = window.yamnet || (window.tf.models ? window.tf.models.yamnet : null);
-        if(statusLabel) statusLabel.textContent = "⏳ AI 데이터 다운로드 중...";
+        if(statusLabel) statusLabel.textContent = "⏳ 분석 모델(3MB) 다운로드...";
         
         yamnetModel = await loader.load();
         
@@ -452,13 +452,17 @@ async function setupAI(stream) {
             statusLabel.textContent = "✅ AI 소음 분석 준비 완료";
             statusLabel.style.color = "var(--primary-color)";
         }
-        console.log("AI Setup Complete");
 
     } catch (e) {
         console.error("AI Setup Fatal Error:", e);
         if(statusLabel) {
-            statusLabel.innerHTML = `⚠️ 오류: ${e.message}<br><button onclick="location.reload()" style="background:#333; color:white; border:none; padding:5px 10px; border-radius:4px; margin-top:5px; cursor:pointer;">다시 시도</button>`;
-            statusLabel.style.color = "#f44336";
+            statusLabel.innerHTML = `
+                <div style="text-align:left; font-size:0.85rem; color:#d32f2f; background:#ffebee; padding:10px; border-radius:8px;">
+                    <strong>⚠️ 연결 실패: ${e.message}</strong><br>
+                    1. 와이파이를 끄고 LTE/5G로 접속해보세요.<br>
+                    2. 광고 차단 앱(AdGuard 등)을 꺼주세요.<br>
+                    3. <a href="#" onclick="location.reload()" style="text-decoration:underline; font-weight:bold;">새로고침</a>
+                </div>`;
         }
     }
     return true;
