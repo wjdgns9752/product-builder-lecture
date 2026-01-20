@@ -383,50 +383,102 @@ function updateInternalClassifierUI(analysis) {
     }
 }
 
+// YAMNet Model URL (Direct from TFHub)
+const YAMNET_MODEL_URL = 'https://www.kaggle.com/models/google/yamnet/tfJs/tfjs/1';
+
+// Global YAMNet Classes (Simplified)
+const YAMNET_CLASSES = [
+ "Speech", "Child speech, kid speaking", "Conversation", "Narration, monologue", "Babbling", "Speech synthesizer", "Shout", "Bellow", "Whoop", "Yell", "Children shouting", "Screaming", "Whispering", "Laughter", "Baby laughter", "Giggle", "Snicker", "Belly laugh", "Chuckles, chortle", "Crying, sobbing", "Baby cry, infant cry", "Whimper", "Wail, moan", "Sigh", "Singing", "Choir", "Yodeling", "Chant", "Mantra", "Male singing", "Female singing", "Child singing", "Synthetic singing", "Rapping", "Humming", "Groan", "Grunt", "Whistling", "Breathing", "Wheeze", "Snoring", "Gasp", "Pant", "Snort", "Cough", "Throat clearing", "Sneeze", "Sniff", "Run", "Shuffle", "Walk, footsteps", "Chewing, mastication", "Biting", "Gargling", "Stomach rumble", "Burping, eructation", "Hiccup", "Fart", "Hands", "Finger snapping", "Clapping", "Heart sounds, heartbeat", "Heart murmur", "Cheering", "Applause", "Chatter", "Crowd", "Hubbub, speech noise, speech babble", "Children playing", "Animal", "Domestic animals, pets", "Dog", "Bark", "Yip", "Howl", "Bow-wow", "Growling", "Whimper (dog)", "Cat", "Purr", "Meow", "Hiss", "Caterwaul", "Livestock, farm animals, working animals", "Horse", "Clip-clop", "Neigh, whinny", "Cattle, bovinae", "Moo", "Cowbell", "Pig", "Oink", "Goat", "Bleat", "Sheep", "Fowl", "Chicken, rooster", "Cluck", "Crowing, cock-a-doodle-doo", "Turkey", "Gobble", "Duck", "Quack", "Goose", "Honk", "Wild animals", "Roaring cats (lions, tigers)", "Roar", "Bird", "Bird vocalization, bird call, bird song", "Chirp, tweet", "Squawk", "Coo", "Crow", "Caw", "Owl", "Hoot", "Bird flight, flapping wings", "Canidae, dogs, wolves", "Rodents, rats, mice", "Mouse", "Patter", "Insect", "Cricket", "Mosquito", "Fly, house fly", "Buzz", "Bee, wasp, etc.", "Frog", "Croak", "Snake", "Rattle", "Whale vocalization", "Music", "Musical instrument", "Plucked string instrument", "Guitar", "Electric guitar", "Bass guitar", "Acoustic guitar", "Steel guitar, slide guitar", "Tapping (guitar technique)", "Strum", "Banjo", "Sitar", "Mandolin", "Zither", "Ukulele", "Ukulele strumming", "String section", "Fiddle", "Violin, fiddle", "Bowed string instrument", "Cello", "Double bass", "Wind instrument, woodwind instrument", "Flute", "Saxophone", "Clarinet", "Harp", "Bell", "Church bell", "Jingle bell", "Bicycle bell", "Tuning fork", "Chime", "Wind chime", "Change ringing (campanology)", "Harmonica", "Accordion", "Bagpipes", "Didgeridoo", "Shofar", "Theremin", "Singing bowl", "Scratch", "Pop", "Snap", "Crack", "Click", "Clatter", "Clunk", "Clank", "Crush", "Knock", "Tap", "Smack, smack", "Thud", "Thump", "Splatter", "Squish", "Squelch", "Crumpling, crinkling", "Tearing", "Beep, bleep", "Ping", "Ding", "Clang", "Squeak", "Creak", "Rustle", "Whir", "Clatter", "Sizzle", "Clicking", "Clickety-clack", "Rumble", "Plop", "Splash, splatter", "Slosh", "Squish", "Drip", "Pour", "Trickle, dribble", "Gush", "Splash", "Slurp", "Spray", "Sprinkler", "Rain", "Raindrop", "Thunder", "Thunderstorm", "Wind", "Rustling leaves", "Wind noise (microphone)", "Storm", "Fire", "Fire crackle", "Vehicle", "Boat, Water vehicle", "Sailboat, sailing ship", "Rowboat, canoe, kayak", "Motorboat, speedboat", "Ship", "Motor vehicle (road)", "Car", "Vehicle horn, car horn, honking", "Toot", "Car alarm", "Power windows, electric windows", "Skidding", "Tire squeal", "Car passing by", "Race car, auto racing", "Truck", "Air brake", "Air horn, truck horn", "Reversing beeps", "Ice cream truck, ice cream van", "Bus", "Emergency vehicle", "Police car (siren)", "Ambulance (siren)", "Fire engine, fire truck (siren)", "Motorcycle", "Traffic noise, roadway noise", "Rail transport", "Train", "Train whistle", "Train horn", "Railroad car, train wagon", "Train wheels squealing", "Subway, metro, underground", "Aircraft", "Aircraft engine", "Jet engine", "Propeller, airscrew", "Helicopter", "Fixed-wing aircraft, airplane", "Silence"
+];
+
 async function setupAI(stream) {
     const statusLabel = document.getElementById('ai-loader');
-    if(statusLabel) statusLabel.textContent = "⏳ AI 엔진 대기 중...";
+    if(statusLabel) statusLabel.textContent = "⏳ AI 엔진 직접 연결 중...";
     
     try {
-        // Simple Wait Logic (Let HTML handle loading)
-        let tfLoaded = false;
-        for(let i=0; i<40; i++) { // Wait 20s
-            if(window.tf) { tfLoaded = true; break; }
-            await new Promise(r => setTimeout(r, 500));
-        }
-        if(!tfLoaded) throw new Error("TFJS 엔진 로드 실패");
-        
         await tf.ready();
-
-        let yamnetLoaded = false;
-        for(let i=0; i<40; i++) {
-            if(window.yamnet || (window.tf.models && window.tf.models.yamnet)) {
-                yamnetLoaded = true; 
-                break; 
-            }
-            await new Promise(r => setTimeout(r, 500));
-        }
-        if(!yamnetLoaded) throw new Error("YAMNet 분석 도구 로드 실패");
-
-        // Load Model
-        const loader = window.yamnet || window.tf.models.yamnet;
-        if(statusLabel) statusLabel.textContent = "⏳ 모델 데이터 다운로드...";
-        yamnetModel = await loader.load();
+        
+        // Load model directly from Kaggle/TFHub
+        if(statusLabel) statusLabel.textContent = "⏳ 모델 데이터(GraphModel) 로드 중...";
+        yamnetModel = await tf.loadGraphModel(YAMNET_MODEL_URL, { fromTFHub: true });
         
         if(statusLabel) {
             statusLabel.textContent = "✅ AI 소음 분석 준비 완료";
             statusLabel.style.color = "var(--primary-color)";
         }
-        console.log("AI Setup Success (Simple Mode)");
-
+        console.log("YAMNet GraphModel Loaded");
     } catch (e) {
         console.error("AI Setup Error:", e);
         if(statusLabel) {
-            statusLabel.innerHTML = `⚠️ 오류: ${e.message}<br><small>네트워크 상태를 확인해주세요.</small>`;
+            statusLabel.innerHTML = `⚠️ 모델 로드 실패: ${e.message}<br><small>인터넷 연결을 확인해주세요.</small>`;
             statusLabel.style.color = "#f44336";
         }
     }
     return true;
+}
+
+// Custom Audio Preprocessing for raw GraphModel
+async function analyzeNoiseCharacteristics() {
+    if (!yamnetModel || isModelProcessing || yamnetAudioBuffer.length < YAMNET_INPUT_SIZE) {
+        return { label: 'none', score: 0 };
+    }
+
+    isModelProcessing = true;
+    try {
+        const inputData = yamnetAudioBuffer.slice(yamnetAudioBuffer.length - YAMNET_INPUT_SIZE);
+        
+        // Execute Model (Input: [16000])
+        const waveform = tf.tensor(inputData);
+        // YAMNet expects [N] or [1, N] depending on signature, usually [N] for raw waveform
+        const [scores, embeddings, log_mel_spectrogram] = yamnetModel.predict(waveform);
+        
+        // Get top score
+        const scoreData = await scores.data();
+        const meanScores = scoreData.slice(0, 521); // Simple mean if multiple frames, but we send 1s so usually 1 frame logic or needs averaging
+        
+        // Find Max
+        let maxScore = 0;
+        let maxIndex = 0;
+        for(let i=0; i<meanScores.length; i++) {
+            if(meanScores[i] > maxScore) {
+                maxScore = meanScores[i];
+                maxIndex = i;
+            }
+        }
+
+        const rawLabel = YAMNET_CLASSES[maxIndex] || 'none';
+        
+        // Map to App Categories
+        let bestLabel = 'none';
+        for (const [category, keywords] of Object.entries(CLASS_MAPPING)) {
+            if (keywords.some(k => rawLabel.toLowerCase().includes(k))) {
+                bestLabel = category;
+                break;
+            }
+        }
+
+        // Cleanup
+        tf.dispose([waveform, scores, embeddings, log_mel_spectrogram]);
+        isModelProcessing = false;
+        
+        // Map UI Label
+        let uiLabel = 'none';
+        switch(bestLabel) {
+            case 'floor': uiLabel = 'Floor Impact'; break;
+            case 'road': uiLabel = 'Road Traffic'; break;
+            case 'home': uiLabel = 'Household'; break;
+            case 'train': uiLabel = 'Train'; break; 
+            case 'air': uiLabel = 'Air'; break;     
+            default: uiLabel = 'none';
+        }
+
+        return { label: uiLabel, score: maxScore };
+
+    } catch (e) {
+        console.error("Inference error:", e);
+        isModelProcessing = false;
+        return { label: 'none', score: 0 };
+    }
 }
 
 function drawSpectrogram() {
