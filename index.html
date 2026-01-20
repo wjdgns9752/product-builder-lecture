@@ -63,53 +63,38 @@
                 <h1>실시간 환경 소음 모니터링</h1>
                 <p class="subtitle">AI 기반 소음원 분석 및 실시간 측정</p>
                 
-                <canvas id="visualizer" width="600" height="100"></canvas>
-                
-                <!-- Noise Classification UI -->
-                <div class="classifier-container">
-                    <h3>🔍 AI 소음원 분석 (YAMNet)</h3>
-                    
-                    <div class="class-grid" id="ai-grid">
-                        <div class="class-card" id="card-home">
-                            <div class="icon">🏠</div>
-                            <div class="label">생활소음</div>
+                <!-- AI Analysis Pipeline UI -->
+                <div class="ai-pipeline-container" style="margin-top: 20px; padding: 15px; background: #fff; border: 1px solid #e0e0e0; border-radius: 12px; text-align: left;">
+                    <h3 style="font-size: 0.95rem; margin-top: 0; color: #333; display: flex; align-items: center; gap: 5px;">
+                        🧠 YAMNet AI 분석 프로세스
+                    </h3>
+
+                    <div style="position: relative; margin: 10px 0;">
+                        <div style="position: absolute; top: 5px; left: 10px; background: rgba(0,0,0,0.6); color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 0.6rem; z-index: 5;">
+                            입력 데이터 (Acoustic Fingerprint)
                         </div>
-                        <div class="class-card" id="card-floor">
-                            <div class="icon">👣</div>
-                            <div class="label">층간소음</div>
-                        </div>
-                        <div class="class-card" id="card-road">
-                            <div class="icon">🚗</div>
-                            <div class="label">도로교통</div>
-                        </div>
-                        <div class="class-card" id="card-train">
-                            <div class="icon">🚆</div>
-                            <div class="label">철도/지하철</div>
-                        </div>
-                        <div class="class-card" id="card-air">
-                            <div class="icon">✈️</div>
-                            <div class="label">항공기</div>
-                        </div>
-                        <div class="class-card active" id="card-none">
-                            <div class="icon">⏸️</div>
-                            <div class="label">대기 중</div>
-                        </div>
-                    </div>
-    
-                    <div id="ai-status-bar" style="margin-top: 15px; padding: 10px; background: #f5f5f5; border-radius: 8px; font-size: 0.85rem; color: #555;">
-                        <span id="ai-loader">⏳ AI 모델 준비 중...</span>
-                        <div id="ai-meter" style="height: 4px; background: #ddd; margin-top: 5px; border-radius: 2px; overflow: hidden;">
-                            <div id="ai-meter-fill" style="width: 0%; height: 100%; background: var(--primary-color); transition: width 0.2s;"></div>
-                        </div>
-                        <div id="ai-result-text" style="margin-top: 5px; font-weight: bold; color: var(--primary-color);"></div>
+                        <canvas id="visualizer" width="600" height="100" style="width:100%; height:100px; background:#000; border-radius:8px;"></canvas>
                     </div>
                     
-                    <!-- AI Debug/Detail Log -->
-                    <div id="ai-detail-log" style="margin-top: 10px; padding: 8px; background: #e3f2fd; border-radius: 6px; font-size: 0.75rem; color: #1565c0; display: none;">
-                        <strong>🔎 상세 분석:</strong> <span id="ai-raw-classes">-</span>
+                    <div class="pipeline-steps" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <!-- Step 1: Input -->
+                        <div class="step-card" style="padding: 8px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #2196f3;">
+                            <div style="font-size: 0.7rem; color: #666; font-weight: bold;">1단계: 소리 지문 추출</div>
+                            <div style="font-size: 0.75rem; margin-top: 4px;">입력된 소리를 <strong>Mel-Spectrogram</strong> 이미지로 변환하여 분석합니다.</div>
+                        </div>
+                        
+                        <!-- Step 2: Recognition -->
+                        <div class="step-card" style="padding: 8px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #4caf50;">
+                            <div style="font-size: 0.7rem; color: #666; font-weight: bold;">2단계: 딥러닝 인식</div>
+                            <div id="ai-step-recognition" style="font-size: 0.75rem; margin-top: 4px; color: #4caf50; font-weight: bold;">소리 패턴 대기 중...</div>
+                        </div>
+                    </div>
+
+                    <div id="ai-logic-box" style="margin-top: 12px; padding: 10px; background: #fffde7; border-radius: 8px; border: 1px dashed #fbc02d; font-size: 0.8rem; color: #5d4037;">
+                        <strong>💡 분석 근거:</strong> <span id="ai-reasoning">현재 주변이 조용하거나 분석 가능한 패턴을 기다리고 있습니다.</span>
                     </div>
                 </div>
-                
+
                 <div class="status-panel">
                     <h2 id="status-text">상태: 대기 중</h2>
                     

@@ -491,11 +491,27 @@ async function analyzeNoiseCharacteristics() {
             logText.textContent = top3.join(', ');
         }
 
-        maxScore = scoreArray[0].s;
-        maxIndex = scoreArray[0].i;
-
         const rawLabel = YAMNET_CLASSES[maxIndex] || 'none';
         
+        // Update Pipeline UI with "Decision Persistence" (Keep for 3 seconds)
+        const recEl = document.getElementById('ai-step-recognition');
+        const reasonEl = document.getElementById('ai-reasoning');
+        
+        if (recEl && reasonEl && maxScore > 0.15) {
+            recEl.textContent = `🎯 감지: ${rawLabel}`;
+            recEl.style.color = "#2196f3";
+            
+            const detailText = top3.join(', ');
+            reasonEl.innerHTML = `패턴 분석 결과 <strong>${rawLabel}</strong> 특징이 가장 강합니다. (신뢰도: ${(maxScore*100).toFixed(0)}%)<br>상세: ${detailText}`;
+            
+            // Clear "Holding" timer if exists
+            if (window.aiHoldTimer) clearTimeout(window.aiHoldTimer);
+            window.aiHoldTimer = setTimeout(() => {
+                recEl.textContent = "새로운 패턴 대기 중...";
+                recEl.style.color = "#4caf50";
+            }, 3000);
+        }
+
         // Map to App Categories
         let bestLabel = 'none';
         for (const [category, keywords] of Object.entries(CLASS_MAPPING)) {
