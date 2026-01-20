@@ -470,12 +470,29 @@ async function analyzeNoiseCharacteristics() {
         // Find Max
         let maxScore = 0;
         let maxIndex = 0;
-        for(let i=0; i<meanScores.length; i++) {
-            if(meanScores[i] > maxScore) {
-                maxScore = meanScores[i];
-                maxIndex = i;
+        
+        // Get Top 3 Predictions for Detail View
+        const top3 = [];
+        const scoreArray = Array.from(meanScores).map((s, i) => ({ s, i }));
+        scoreArray.sort((a, b) => b.s - a.s);
+        
+        for(let k=0; k<3; k++) {
+            const item = scoreArray[k];
+            if (item.s > 0.05) { // 5% threshold
+                top3.push(`${YAMNET_CLASSES[item.i]} (${(item.s*100).toFixed(0)}%)`);
             }
         }
+        
+        // Update UI with Raw Details
+        const logEl = document.getElementById('ai-detail-log');
+        const logText = document.getElementById('ai-raw-classes');
+        if (logEl && logText && top3.length > 0) {
+            logEl.style.display = 'block';
+            logText.textContent = top3.join(', ');
+        }
+
+        maxScore = scoreArray[0].s;
+        maxIndex = scoreArray[0].i;
 
         const rawLabel = YAMNET_CLASSES[maxIndex] || 'none';
         
