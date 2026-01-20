@@ -419,6 +419,7 @@ async function setupAI(stream) {
 
 // Custom Audio Preprocessing for raw GraphModel
 async function analyzeNoiseCharacteristics() {
+    // Safety check: If model isn't loaded yet, skip analysis
     if (!yamnetModel || isModelProcessing || yamnetAudioBuffer.length < YAMNET_INPUT_SIZE) {
         return { label: 'none', score: 0 };
     }
@@ -652,12 +653,16 @@ async function startAudio() {
         
         microphone.connect(analyser);
         
-        // Start AI Module independently
-        setupAI(stream);
+        // Start AI Module independently (Don't await, let it load in background)
+        setupAI(stream).catch(e => console.error("AI Init Failed:", e));
     }
 
     initBtn.style.display = 'none';
     recordBtn.classList.remove('hidden'); // Show record button
+    
+    if (audioContext.state === 'suspended') {
+        await audioContext.resume();
+    }
     
     if (!isMonitoring) {
         isMonitoring = true;
