@@ -442,12 +442,35 @@ async function setupAI(stream) {
     }
 
     try {
-        // Simple Wait Logic (Relies on HTML tags)
+        // Simple Wait Logic with Rescue
         let loader = null;
-        for(let i=0; i<40; i++) { // Wait 20s
+        let attempts = 0;
+        
+        // Rescue Loader Function
+        const loadRescueScript = (url) => {
+            console.log("Injecting rescue script:", url);
+            const s = document.createElement('script');
+            s.src = url;
+            document.head.appendChild(s);
+        };
+
+        for(let i=0; i<60; i++) { // Wait 30s max
             if(aiSkipMode) return true;
+            
             loader = window.yamnet || (window.tf && window.tf.models ? window.tf.models.yamnet : null);
             if(loader) break;
+
+            // Trigger Rescue after 3 seconds (approx 6 attempts)
+            if (i === 6) {
+                if(sysMsg) sysMsg.textContent = "⏳ 보조 서버 연결 시도...";
+                loadRescueScript("https://unpkg.com/@tensorflow-models/yamnet@0.0.1/dist/yamnet.min.js");
+            }
+            
+            // Trigger 2nd Rescue after 10 seconds
+            if (i === 20) {
+                loadRescueScript("https://cdn.jsdelivr.net/npm/@tensorflow-models/yamnet@0.0.1/dist/yamnet.min.js");
+            }
+
             await new Promise(r => setTimeout(r, 500));
         }
 
