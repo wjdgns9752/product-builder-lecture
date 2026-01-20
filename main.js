@@ -421,36 +421,76 @@ const YAMNET_CLASSES = [
  "Speech", "Child speech, kid speaking", "Conversation", "Narration, monologue", "Babbling", "Speech synthesizer", "Shout", "Bellow", "Whoop", "Yell", "Children shouting", "Screaming", "Whispering", "Laughter", "Baby laughter", "Giggle", "Snicker", "Belly laugh", "Chuckles, chortle", "Crying, sobbing", "Baby cry, infant cry", "Whimper", "Wail, moan", "Sigh", "Singing", "Choir", "Yodeling", "Chant", "Mantra", "Male singing", "Female singing", "Child singing", "Synthetic singing", "Rapping", "Humming", "Groan", "Grunt", "Whistling", "Breathing", "Wheeze", "Snoring", "Gasp", "Pant", "Snort", "Cough", "Throat clearing", "Sneeze", "Sniff", "Run", "Shuffle", "Walk, footsteps", "Chewing, mastication", "Biting", "Gargling", "Stomach rumble", "Burping, eructation", "Hiccup", "Fart", "Hands", "Finger snapping", "Clapping", "Heart sounds, heartbeat", "Heart murmur", "Cheering", "Applause", "Chatter", "Crowd", "Hubbub, speech noise, speech babble", "Children playing", "Animal", "Domestic animals, pets", "Dog", "Bark", "Yip", "Howl", "Bow-wow", "Growling", "Whimper (dog)", "Cat", "Purr", "Meow", "Hiss", "Caterwaul", "Livestock, farm animals, working animals", "Horse", "Clip-clop", "Neigh, whinny", "Cattle, bovinae", "Moo", "Cowbell", "Pig", "Oink", "Goat", "Bleat", "Sheep", "Fowl", "Chicken, rooster", "Cluck", "Crowing, cock-a-doodle-doo", "Turkey", "Gobble", "Duck", "Quack", "Goose", "Honk", "Wild animals", "Roaring cats (lions, tigers)", "Roar", "Bird", "Bird vocalization, bird call, bird song", "Chirp, tweet", "Squawk", "Coo", "Crow", "Caw", "Owl", "Hoot", "Bird flight, flapping wings", "Canidae, dogs, wolves", "Rodents, rats, mice", "Mouse", "Patter", "Insect", "Cricket", "Mosquito", "Fly, house fly", "Buzz", "Bee, wasp, etc.", "Frog", "Croak", "Snake", "Rattle", "Whale vocalization", "Music", "Musical instrument", "Plucked string instrument", "Guitar", "Electric guitar", "Bass guitar", "Acoustic guitar", "Steel guitar, slide guitar", "Tapping (guitar technique)", "Strum", "Banjo", "Sitar", "Mandolin", "Zither", "Ukulele", "Ukulele strumming", "String section", "Fiddle", "Violin, fiddle", "Bowed string instrument", "Cello", "Double bass", "Wind instrument, woodwind instrument", "Flute", "Saxophone", "Clarinet", "Harp", "Bell", "Church bell", "Jingle bell", "Bicycle bell", "Tuning fork", "Chime", "Wind chime", "Change ringing (campanology)", "Harmonica", "Accordion", "Bagpipes", "Didgeridoo", "Shofar", "Theremin", "Singing bowl", "Scratch", "Pop", "Snap", "Crack", "Click", "Clatter", "Clunk", "Clank", "Crush", "Knock", "Tap", "Smack, smack", "Thud", "Thump", "Splatter", "Squish", "Squelch", "Crumpling, crinkling", "Tearing", "Beep, bleep", "Ping", "Ding", "Clang", "Squeak", "Creak", "Rustle", "Whir", "Clatter", "Sizzle", "Clicking", "Clickety-clack", "Rumble", "Plop", "Splash, splatter", "Slosh", "Squish", "Drip", "Pour", "Trickle, dribble", "Gush", "Splash", "Slurp", "Spray", "Sprinkler", "Rain", "Raindrop", "Thunder", "Thunderstorm", "Wind", "Rustling leaves", "Wind noise (microphone)", "Storm", "Fire", "Fire crackle", "Vehicle", "Boat, Water vehicle", "Sailboat, sailing ship", "Rowboat, canoe, kayak", "Motorboat, speedboat", "Ship", "Motor vehicle (road)", "Car", "Vehicle horn, car horn, honking", "Toot", "Car alarm", "Power windows, electric windows", "Skidding", "Tire squeal", "Car passing by", "Race car, auto racing", "Truck", "Air brake", "Air horn, truck horn", "Reversing beeps", "Ice cream truck, ice cream van", "Bus", "Emergency vehicle", "Police car (siren)", "Ambulance (siren)", "Fire engine, fire truck (siren)", "Motorcycle", "Traffic noise, roadway noise", "Rail transport", "Train", "Train whistle", "Train horn", "Railroad car, train wagon", "Train wheels squealing", "Subway, metro, underground", "Aircraft", "Aircraft engine", "Jet engine", "Propeller, airscrew", "Helicopter", "Fixed-wing aircraft, airplane", "Silence"
 ];
 
+// Global History for Map
+let noiseHistory = [];
+let aiSkipMode = false;
+
 async function setupAI(stream) {
     const sysBar = document.getElementById('system-status-bar');
-    const statusLabel = document.getElementById('ai-loader');
+    const sysMsg = document.getElementById('sys-msg');
+    const skipBtn = document.getElementById('btn-skip-ai');
     
-    if(sysBar) { sysBar.style.display = 'block'; sysBar.textContent = "⏳ AI 엔진 다운로드 중..."; }
-    if(statusLabel) statusLabel.textContent = "⏳ AI 엔진 다운로드 중...";
-    
-    // Internal Script Loader (Self-contained)
-    
+    if(sysBar) { sysBar.style.display = 'flex'; }
+    if(sysMsg) sysMsg.textContent = "⏳ AI 엔진 준비 중...";
+
+    // Skip Button Logic
+    if(skipBtn) {
+        skipBtn.onclick = () => {
+            aiSkipMode = true;
+            if(sysBar) sysBar.style.display = 'none';
+        };
+    }
+
     try {
-        await tf.ready();
-        
-        // Load model directly from Kaggle/TFHub
-        if(statusLabel) statusLabel.textContent = "⏳ 모델 데이터(GraphModel) 로드 중...";
-        yamnetModel = await tf.loadGraphModel(YAMNET_MODEL_URL, { fromTFHub: true });
-        
-        if(statusLabel) {
-            statusLabel.textContent = "✅ AI 소음 분석 준비 완료";
-            statusLabel.style.color = "var(--primary-color)";
+        // Simple Wait Logic (Relies on HTML tags)
+        let loader = null;
+        for(let i=0; i<40; i++) { // Wait 20s
+            if(aiSkipMode) return true;
+            loader = window.yamnet || (window.tf && window.tf.models ? window.tf.models.yamnet : null);
+            if(loader) break;
+            await new Promise(r => setTimeout(r, 500));
         }
-        console.log("YAMNet GraphModel Loaded");
+
+        if (!loader) throw new Error("엔진 로드 시간 초과");
+
+        if(sysMsg) sysMsg.textContent = "⏳ 모델 초기화 중...";
+        yamnetModel = await loader.load();
+        
+        if(sysBar) {
+            sysMsg.textContent = "✅ AI 준비 완료";
+            setTimeout(() => sysBar.style.display = 'none', 2000);
+        }
+
     } catch (e) {
-        console.error("AI Setup Error:", e);
-        if(statusLabel) {
-            statusLabel.innerHTML = `⚠️ 모델 로드 실패: ${e.message}<br><small>인터넷 연결을 확인해주세요.</small>`;
-            statusLabel.style.color = "#f44336";
-        }
+        console.warn("AI Setup Failed:", e);
+        aiSkipMode = true;
+        if(sysBar) sysBar.style.display = 'none';
     }
     return true;
 }
+
+// Restore Calibration Button Logic
+document.addEventListener('DOMContentLoaded', () => {
+    const calibBtn = document.getElementById('calibration-btn');
+    const calibModal = document.getElementById('calibration-modal');
+    const closeCalibBtn = document.getElementById('cancel-calib');
+    
+    if (calibBtn && calibModal) {
+        calibBtn.addEventListener('click', async () => {
+            console.log("Calibration clicked");
+            if (!audioContext) await startAudio();
+            calibModal.classList.remove('hidden');
+            calibModal.style.display = 'flex';
+        });
+    }
+    
+    if(closeCalibBtn && calibModal) {
+        closeCalibBtn.addEventListener('click', () => {
+            calibModal.classList.add('hidden');
+            calibModal.style.display = 'none';
+        });
+    }
+});
 
 // Custom Audio Preprocessing for raw GraphModel
 async function analyzeNoiseCharacteristics() {
