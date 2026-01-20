@@ -385,51 +385,77 @@ function updateInternalClassifierUI(analysis) {
 
 async function setupAI(stream) {
     const statusLabel = document.getElementById('ai-loader');
-    if(statusLabel) statusLabel.textContent = "⏳ AI 엔진 라이브러리 확인 중...";
+    if(statusLabel) statusLabel.textContent = "⏳ AI 엔진 초고속 연결 시도...";
     
+    // Aggressive Parallel Loading
+    const loadLibrary = (url) => {
+        return new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = url;
+            script.async = true;
+            script.onload = () => resolve(url);
+            script.onerror = () => reject(url);
+            document.head.appendChild(script);
+        });
+    };
+
     try {
-        // 1. Wait for TFJS (Local)
-        let retry = 0;
-        while (!window.tf && retry < 20) {
-            await new Promise(r => setTimeout(r, 200));
-            retry++;
+        // 1. Load TFJS (Race Condition: First one wins)
+        if (!window.tf) {
+            try {
+                await Promise.any([
+                    loadLibrary("https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.18.0/dist/tf.min.js"),
+                    loadLibrary("https://unpkg.com/@tensorflow/tfjs@3.18.0/dist/tf.min.js"),
+                    loadLibrary("https://cdnjs.cloudflare.com/ajax/libs/tensorflow/3.18.0/tf.min.js")
+                ]);
+            } catch (e) {
+                throw new Error("모든 서버에서 엔진 다운로드 실패");
+            }
         }
-        if (!window.tf) throw new Error("TFJS 엔진 로드 실패");
         await tf.ready();
 
-        // 2. Wait for YAMNet (Loaded by HTML)
-        let loader = null;
-        for (let i = 0; i < 40; i++) { // Wait 20 seconds
-            if (window.yamnet) {
-                loader = window.yamnet;
-                break;
+        // 2. Load YAMNet (Race Condition)
+        if (!window.yamnet) {
+            try {
+                await Promise.any([
+                    loadLibrary("https://cdn.jsdelivr.net/npm/@tensorflow-models/yamnet@0.0.1/dist/yamnet.min.js"),
+                    loadLibrary("https://unpkg.com/@tensorflow-models/yamnet@0.0.1/dist/yamnet.min.js")
+                ]);
+            } catch (e) {
+                throw new Error("모든 서버에서 분석 도구 다운로드 실패");
             }
-            await new Promise(r => setTimeout(r, 500));
         }
 
-        if (!loader) throw new Error("모든 AI 서버 연결이 차단되었습니다.");
+        // 3. Initialize
+        if(statusLabel) statusLabel.textContent = "⏳ 분석 모델 가동 중...";
+        
+        // Find object
+        let loader = null;
+        for(let i=0; i<10; i++) {
+            loader = window.yamnet || (window.tf.models ? window.tf.models.yamnet : null);
+            if(loader) break;
+            await new Promise(r => setTimeout(r, 200));
+        }
 
-        // 3. Load Model
-        if(statusLabel) statusLabel.textContent = "⏳ 분석 모델 다운로드 중...";
+        if (!loader) throw new Error("로드된 라이브러리를 찾을 수 없습니다.");
+
         yamnetModel = await loader.load();
         
         if(statusLabel) {
             statusLabel.textContent = "✅ AI 소음 분석 준비 완료";
             statusLabel.style.color = "var(--primary-color)";
         }
+        console.log("AI Setup Success (Aggressive Mode)");
+
     } catch (e) {
         console.error("AI Setup Error:", e);
         if(statusLabel) {
             statusLabel.innerHTML = `
-                <div style="text-align:left; font-size:0.85rem; padding:10px; background:#ffebee; border-radius:8px; color:#d32f2f;">
-                    <strong>⛔ 모든 연결이 차단됨</strong><br>
-                    현재 네트워크(와이파이)가 외부 파일 다운로드를 막고 있습니다.<br><br>
-                    <strong>💡 해결 방법:</strong><br>
-                    1. 와이파이를 끄고 <strong>LTE/5G 데이터</strong>를 켜세요.<br>
-                    2. 회사/학교망이라면 <strong>개인 핫스팟</strong>을 쓰세요.<br>
-                    3. <a href="#" onclick="location.reload()" style="font-weight:bold; text-decoration:underline;">새로고침</a>
+                <div style="color:#d32f2f; background:#ffebee; padding:10px; border-radius:8px; font-size:0.85rem;">
+                    <strong>⛔ 치명적 오류: ${e.message}</strong><br>
+                    네트워크 방화벽이 매우 강력합니다.<br>
+                    <a href="#" onclick="location.reload()" style="font-weight:bold;">다시 시도</a>
                 </div>`;
-            statusLabel.style.color = "#f44336";
         }
     }
     return true;
