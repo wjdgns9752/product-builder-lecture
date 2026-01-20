@@ -429,9 +429,12 @@
         </div>
     </div>
 
-    <!-- AI Engine Libraries (Hybrid Mode: Local TFJS + Fast CDN YAMNet) -->
+    <!-- AI Engine Libraries (Triple Redundancy) -->
     <script src="libs/tf.min.js"></script>
+    <!-- Attempt 1: JsDelivr -->
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/yamnet@0.0.1/dist/yamnet.min.js"></script>
+    <!-- Attempt 2: Unpkg (Fallback) -->
+    <script src="https://unpkg.com/@tensorflow-models/yamnet@0.0.1/dist/yamnet.min.js"></script>
     
     <script src="main.js?v=16"></script>
 </body>
