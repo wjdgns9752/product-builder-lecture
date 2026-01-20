@@ -385,66 +385,33 @@ function updateInternalClassifierUI(analysis) {
 
 async function setupAI(stream) {
     const statusLabel = document.getElementById('ai-loader');
+    if(statusLabel) statusLabel.textContent = "⏳ AI 엔진 가동 중...";
     
-    // Ultimate Fallback List (4 Major CDNs)
-    const sources = [
-        { name: "Server A (jsDelivr)", url: "https://cdn.jsdelivr.net/npm/@tensorflow-models/yamnet@0.0.1/dist/yamnet.min.js" },
-        { name: "Server B (Unpkg)", url: "https://unpkg.com/@tensorflow-models/yamnet@0.0.1/dist/yamnet.min.js" },
-        { name: "Server C (Cloudflare)", url: "https://cdnjs.cloudflare.com/ajax/libs/tensorflow-models-yamnet/0.0.1/yamnet.min.js" }, // Note: Placeholder if cdnjs adds it, but mainly trying alternates
-        { name: "Server D (Latest)", url: "https://cdn.jsdelivr.net/npm/@tensorflow-models/yamnet" } // Direct module mapping
-    ];
-
-    const loadScript = (src) => {
-        return new Promise((resolve, reject) => {
-            const script = document.createElement('script');
-            script.src = src;
-            // Removed crossOrigin to prevent strict CORS blocking on mobile
-            script.onload = () => resolve(true);
-            script.onerror = () => reject(new Error(`Load failed`));
-            document.head.appendChild(script);
-        });
-    };
-
     try {
-        // 1. Wait for TFJS
-        if(statusLabel) statusLabel.textContent = "⏳ 기본 엔진(TFJS) 준비 중...";
-        let tfReady = false;
-        for(let i=0; i<30; i++) {
-            if(window.tf) { tfReady = true; break; }
+        // 1. Check for TFJS (Loaded locally)
+        let retry = 0;
+        while (!window.tf && retry < 10) {
             await new Promise(r => setTimeout(r, 200));
+            retry++;
         }
-        if(!tfReady) throw new Error("기본 엔진(TFJS)이 차단되었습니다.");
+        if (!window.tf) throw new Error("엔진 파일(tf.min.js) 로드 실패");
         
-        // Optimize backend for mobile to prevent crash
-        try { await tf.setBackend('cpu'); await tf.ready(); } catch(e) {} 
+        await tf.ready();
 
-        // 2. Cascade Loading for YAMNet
-        let yamnetLoaded = false;
-        if (window.yamnet) yamnetLoaded = true;
-
-        if (!yamnetLoaded) {
-            for (const source of sources) {
-                if(statusLabel) statusLabel.textContent = `📡 연결 시도: ${source.name}`;
-                console.log(`Trying ${source.name}...`);
-                
-                try {
-                    await loadScript(source.url);
-                    // Check Global Object
-                    if (window.yamnet || (window.tf && window.tf.models && window.tf.models.yamnet)) {
-                        yamnetLoaded = true;
-                        break;
-                    }
-                } catch (err) {
-                    console.warn(`Failed: ${source.name}`);
-                }
-            }
+        // 2. Check for YAMNet (Loaded locally)
+        retry = 0;
+        while (!window.yamnet && retry < 10) {
+            await new Promise(r => setTimeout(r, 200));
+            retry++;
         }
-
-        if (!yamnetLoaded) throw new Error("모든 서버 연결 실패");
-
-        // 3. Load Model
+        
         const loader = window.yamnet || (window.tf.models ? window.tf.models.yamnet : null);
-        if(statusLabel) statusLabel.textContent = "⏳ 분석 모델(3MB) 다운로드...";
+        if (!loader) throw new Error("분석 파일(yamnet.min.js) 로드 실패");
+
+        // 3. Load Model Data
+        // Note: The model weights are still fetched from Google Storage by the library.
+        // If this fails, it means the network blocks all Google Storage access.
+        if(statusLabel) statusLabel.textContent = "⏳ 분석 모델 데이터 읽는 중...";
         
         yamnetModel = await loader.load();
         
@@ -452,16 +419,16 @@ async function setupAI(stream) {
             statusLabel.textContent = "✅ AI 소음 분석 준비 완료";
             statusLabel.style.color = "var(--primary-color)";
         }
+        console.log("AI Setup Complete (Local Mode)");
 
     } catch (e) {
         console.error("AI Setup Fatal Error:", e);
         if(statusLabel) {
             statusLabel.innerHTML = `
-                <div style="text-align:left; font-size:0.85rem; color:#d32f2f; background:#ffebee; padding:10px; border-radius:8px;">
-                    <strong>⚠️ 연결 실패: ${e.message}</strong><br>
-                    1. 와이파이를 끄고 LTE/5G로 접속해보세요.<br>
-                    2. 광고 차단 앱(AdGuard 등)을 꺼주세요.<br>
-                    3. <a href="#" onclick="location.reload()" style="text-decoration:underline; font-weight:bold;">새로고침</a>
+                <div style="color:#d32f2f; background:#ffebee; padding:10px; border-radius:8px; font-size:0.85rem;">
+                    <strong>⚠️ 치명적 오류: ${e.message}</strong><br>
+                    내부 엔진 파일이 손상되었거나 로드되지 않았습니다.<br>
+                    <a href="#" onclick="location.reload()" style="font-weight:bold;">새로고침</a>
                 </div>`;
         }
     }
