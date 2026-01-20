@@ -95,6 +95,37 @@
                     </div>
                 </div>
 
+                <!-- Re-added Classification Result Cards -->
+                <div class="classifier-container" style="margin-top: 20px;">
+                    <h3 style="text-align:left; color:#666; font-size:0.9rem;">📌 최종 분류 결과</h3>
+                    <div class="class-grid" id="ai-grid">
+                        <div class="class-card" id="card-home">
+                            <div class="icon">🏠</div>
+                            <div class="label">생활소음</div>
+                        </div>
+                        <div class="class-card" id="card-floor">
+                            <div class="icon">👣</div>
+                            <div class="label">층간소음</div>
+                        </div>
+                        <div class="class-card" id="card-road">
+                            <div class="icon">🚗</div>
+                            <div class="label">도로교통</div>
+                        </div>
+                        <div class="class-card" id="card-train">
+                            <div class="icon">🚆</div>
+                            <div class="label">철도/지하철</div>
+                        </div>
+                        <div class="class-card" id="card-air">
+                            <div class="icon">✈️</div>
+                            <div class="label">항공기</div>
+                        </div>
+                        <div class="class-card active" id="card-none">
+                            <div class="icon">⏸️</div>
+                            <div class="label">대기 중</div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="status-panel">
                     <h2 id="status-text">상태: 대기 중</h2>
                     
@@ -179,6 +210,18 @@
                     <span id="noise-badge" class="badge">측정 필요</span>
                     <p id="analysis-comment">데이터를 분석 중입니다. 측정을 시작해 주세요.</p>
                 </div>
+
+                <!-- Noise Fatigue Section -->
+                <div style="margin-top: 20px; padding: 15px; background: #fff3e0; border-radius: 12px; border: 1px solid #ffe0b2;">
+                    <h3 style="margin-top:0; font-size:1rem; color:#e65100;">⚡ 청각 피로도 (Noise Fatigue)</h3>
+                    <p style="font-size:0.8rem; color:#666;">지속적인 소음 노출로 인한 스트레스 누적치를 추정합니다.</p>
+                    <div style="height: 10px; background: #e0e0e0; border-radius: 5px; overflow: hidden; margin-top: 10px;">
+                        <div id="fatigue-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #4caf50, #f44336); transition: width 0.5s;"></div>
+                    </div>
+                    <div style="text-align: right; font-size: 0.8rem; font-weight: bold; margin-top: 5px; color: #bf360c;">
+                        누적 피로도: <span id="fatigue-val">0</span>%
+                    </div>
+                </div>
             </section>
         </div>
 
@@ -186,12 +229,12 @@
         <div id="view-map" class="view hidden">
             <section class="tool-section">
                 <h2>🗺️ 실시간 소음 지도</h2>
-                <p class="subtitle">이동 경로에 따른 소음 변화가 기록됩니다.</p>
+                <p class="subtitle">이동 경로에 따른 소음 히트맵</p>
                 
-                <div id="map-container" style="height: 350px; border-radius: 12px; margin: 15px 0;"></div>
+                <div id="map-container" style="height: 350px; border-radius: 12px; margin: 15px 0; border: 2px solid #ddd;"></div>
                 
                 <div class="controls">
-                    <button id="btn-update-location" class="secondary-btn">📍 현재 위치로 이동</button>
+                    <button id="btn-update-location" class="secondary-btn">📍 내 위치로 이동</button>
                     <button id="btn-clear-map" class="secondary-btn" style="border-color:#f44336; color:#f44336;">🗑️ 기록 삭제</button>
                 </div>
             </section>

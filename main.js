@@ -536,6 +536,22 @@ async function analyzeNoiseCharacteristics() {
             default: uiLabel = 'none';
         }
 
+        // --- Restore Card UI Update ---
+        const cards = {
+            home: document.getElementById('card-home'),
+            floor: document.getElementById('card-floor'),
+            road: document.getElementById('card-road'),
+            train: document.getElementById('card-train'), 
+            air: document.getElementById('card-air'),
+            none: document.getElementById('card-none')
+        };
+        
+        Object.values(cards).forEach(c => c && c.classList.remove('active'));
+        
+        const cardKey = bestLabel === 'none' ? 'none' : bestLabel;
+        if (cards[cardKey]) cards[cardKey].classList.add('active');
+        // -----------------------------
+
         return { label: uiLabel, score: maxScore };
 
     } catch (e) {
