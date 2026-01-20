@@ -420,7 +420,15 @@ async function setupAI(stream) {
     } catch (e) {
         console.error("AI Setup Error:", e);
         if(statusLabel) {
-            statusLabel.innerHTML = `⚠️ 오류: ${e.message}<br><button onclick="location.reload()" style="background:var(--primary-color); color:white; border:none; padding:5px 10px; border-radius:4px; margin-top:5px;">새로고침</button>`;
+            statusLabel.innerHTML = `
+                <div style="text-align:left; font-size:0.85rem; padding:10px; background:#ffebee; border-radius:8px; color:#d32f2f;">
+                    <strong>⛔ 모든 연결이 차단됨</strong><br>
+                    현재 네트워크(와이파이)가 외부 파일 다운로드를 막고 있습니다.<br><br>
+                    <strong>💡 해결 방법:</strong><br>
+                    1. 와이파이를 끄고 <strong>LTE/5G 데이터</strong>를 켜세요.<br>
+                    2. 회사/학교망이라면 <strong>개인 핫스팟</strong>을 쓰세요.<br>
+                    3. <a href="#" onclick="location.reload()" style="font-weight:bold; text-decoration:underline;">새로고침</a>
+                </div>`;
             statusLabel.style.color = "#f44336";
         }
     }
