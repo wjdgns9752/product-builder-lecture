@@ -385,59 +385,79 @@ function updateInternalClassifierUI(analysis) {
 
 async function setupAI(stream) {
     const statusLabel = document.getElementById('ai-loader');
-    if(statusLabel) statusLabel.textContent = "⏳ AI 엔진 초고속 연결 시도...";
+    if(statusLabel) statusLabel.textContent = "⏳ AI 엔진 내부 생성 중...";
     
-    // Aggressive Parallel Loading
-    const loadLibrary = (url) => {
-        return new Promise((resolve, reject) => {
-            const script = document.createElement('script');
-            script.src = url;
-            script.async = true;
-            script.onload = () => resolve(url);
-            script.onerror = () => reject(url);
-            document.head.appendChild(script);
-        });
+    // Bypass CDN blocking by fetching text content and creating Blob URL
+    // Firewalls often block <script src="..."> but allow fetch() text
+    const loadBypassedScript = async (url) => {
+        try {
+            const response = await fetch(url);
+            if (!response.ok) throw new Error("Fetch failed");
+            const scriptText = await response.text();
+            const blob = new Blob([scriptText], { type: 'text/javascript' });
+            const blobUrl = URL.createObjectURL(blob);
+            
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = blobUrl;
+                script.onload = () => {
+                    URL.revokeObjectURL(blobUrl);
+                    resolve();
+                };
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+        } catch (e) {
+            console.warn("Bypass load failed:", url);
+            throw e;
+        }
     };
 
     try {
-        // 1. Load TFJS (Race Condition: First one wins)
+        // 1. Load TFJS (Try standard first, then bypass)
         if (!window.tf) {
             try {
-                await Promise.any([
-                    loadLibrary("https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.18.0/dist/tf.min.js"),
-                    loadLibrary("https://unpkg.com/@tensorflow/tfjs@3.18.0/dist/tf.min.js"),
-                    loadLibrary("https://cdnjs.cloudflare.com/ajax/libs/tensorflow/3.18.0/tf.min.js")
-                ]);
+                await loadBypassedScript("https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.18.0/dist/tf.min.js");
             } catch (e) {
-                throw new Error("모든 서버에서 엔진 다운로드 실패");
+                // Fallback to standard injection if fetch fails (CORS)
+                await new Promise((resolve, reject) => {
+                    const s = document.createElement('script');
+                    s.src = "https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.18.0/dist/tf.min.js";
+                    s.onload = resolve; s.onerror = reject;
+                    document.head.appendChild(s);
+                });
             }
         }
         await tf.ready();
 
-        // 2. Load YAMNet (Race Condition)
+        // 2. Load YAMNet (Bypass Mode)
         if (!window.yamnet) {
             try {
-                await Promise.any([
-                    loadLibrary("https://cdn.jsdelivr.net/npm/@tensorflow-models/yamnet@0.0.1/dist/yamnet.min.js"),
-                    loadLibrary("https://unpkg.com/@tensorflow-models/yamnet@0.0.1/dist/yamnet.min.js")
-                ]);
+                await loadBypassedScript("https://cdn.jsdelivr.net/npm/@tensorflow-models/yamnet@0.0.1/dist/yamnet.min.js");
             } catch (e) {
-                throw new Error("모든 서버에서 분석 도구 다운로드 실패");
+                await new Promise((resolve, reject) => {
+                    const s = document.createElement('script');
+                    s.src = "https://unpkg.com/@tensorflow-models/yamnet@0.0.1/dist/yamnet.min.js";
+                    s.onload = resolve; s.onerror = reject;
+                    document.head.appendChild(s);
+                });
             }
         }
 
         // 3. Initialize
-        if(statusLabel) statusLabel.textContent = "⏳ 분석 모델 가동 중...";
+        if(statusLabel) statusLabel.textContent = "⏳ 분석 엔진 가동...";
         
-        // Find object
-        let loader = null;
-        for(let i=0; i<10; i++) {
-            loader = window.yamnet || (window.tf.models ? window.tf.models.yamnet : null);
-            if(loader) break;
-            await new Promise(r => setTimeout(r, 200));
+        let loader = window.yamnet || (window.tf.models ? window.tf.models.yamnet : null);
+        if (!loader) {
+             // Last resort wait
+             for(let i=0; i<10; i++) {
+                 loader = window.yamnet;
+                 if(loader) break;
+                 await new Promise(r => setTimeout(r, 200));
+             }
         }
-
-        if (!loader) throw new Error("로드된 라이브러리를 찾을 수 없습니다.");
+        
+        if (!loader) throw new Error("엔진 생성 실패");
 
         yamnetModel = await loader.load();
         
@@ -445,17 +465,13 @@ async function setupAI(stream) {
             statusLabel.textContent = "✅ AI 소음 분석 준비 완료";
             statusLabel.style.color = "var(--primary-color)";
         }
-        console.log("AI Setup Success (Aggressive Mode)");
+        console.log("AI Setup Success (Bypass Mode)");
 
     } catch (e) {
         console.error("AI Setup Error:", e);
         if(statusLabel) {
-            statusLabel.innerHTML = `
-                <div style="color:#d32f2f; background:#ffebee; padding:10px; border-radius:8px; font-size:0.85rem;">
-                    <strong>⛔ 치명적 오류: ${e.message}</strong><br>
-                    네트워크 방화벽이 매우 강력합니다.<br>
-                    <a href="#" onclick="location.reload()" style="font-weight:bold;">다시 시도</a>
-                </div>`;
+            statusLabel.innerHTML = `⚠️ 오류: ${e.message}<br><small>와이파이를 끄고 다시 시도해주세요.</small>`;
+            statusLabel.style.color = "#f44336";
         }
     }
     return true;
