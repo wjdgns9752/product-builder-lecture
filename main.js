@@ -16,6 +16,36 @@ const app = firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 const auth = firebase.auth();
 
+// --- CRITICAL: Global Function Definition (Must be at the top) ---
+window.startMonitoring = async function() {
+    console.log("Start button clicked (Global)");
+    const btn = document.getElementById('init-btn');
+    if(btn) {
+        btn.disabled = true;
+        btn.textContent = "⌛ 초기화 중...";
+    }
+
+    try {
+        await startAudio();
+    } catch (e) {
+        console.error("Critical Start Error:", e);
+        alert(`❌ 실행 오류: ${e.message}`);
+        if(btn) {
+            btn.disabled = false;
+            btn.textContent = "모니터링 시작";
+        }
+    }
+};
+
+// Auto-bind on load (Safety net)
+document.addEventListener('DOMContentLoaded', () => {
+    const btn = document.getElementById('init-btn');
+    if(btn) {
+        btn.onclick = window.startMonitoring;
+        console.log("Button event bound via DOMContentLoaded");
+    }
+});
+
 // DOM Elements
 const initBtn = document.getElementById('init-btn');
 const recordBtn = document.getElementById('record-btn');
@@ -619,26 +649,6 @@ thresholdSlider.addEventListener('input', (e) => {
 });
 
 // --- Audio Functions ---
-// Exposed globally for HTML onclick
-window.startMonitoring = async function() {
-    console.log("Start button clicked");
-    const btn = document.getElementById('init-btn');
-    btn.disabled = true;
-    btn.textContent = "⌛ 마이크 켜는 중...";
-
-    try {
-        const success = await startAudio();
-        if (!success) {
-            throw new Error("오디오 권한 획득 실패");
-        }
-    } catch (e) {
-        console.error("Critical Start Error:", e);
-        alert(`❌ 실행 오류: ${e.message}\n마이크 권한을 확인해주세요.`);
-        btn.disabled = false;
-        btn.textContent = "모니터링 시작";
-    }
-};
-
 async function startAudio() {
   try {
     if (audioContext && audioContext.state === 'closed') {
