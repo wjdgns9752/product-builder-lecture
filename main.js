@@ -425,17 +425,28 @@ const YAMNET_CLASSES = [
 let noiseHistory = [];
 let aiSkipMode = false;
 
-// --- Global Calibration Function ---
+// --- Global Calibration Function (Accessible from HTML) ---
 window.startCalibration = async function() {
-    console.log("Calibration Button Clicked");
-    if (!audioContext) await startAudio();
+    console.log("Calibration Triggered");
+    
+    // Ensure audio context is running
+    if (!audioContext || audioContext.state === 'suspended') {
+        try {
+            await startAudio();
+        } catch(e) {
+            alert("마이크를 먼저 켜주세요.");
+            return;
+        }
+    }
     
     const modal = document.getElementById('calibration-modal');
     if(modal) {
         modal.classList.remove('hidden');
         modal.style.display = 'flex';
+        // Auto start pink noise for convenience
+        if(!isPlayingNoise) playPinkNoise();
     } else {
-        alert("보정 화면을 불러올 수 없습니다.");
+        alert("설정 화면 로드 오류");
     }
 };
 
