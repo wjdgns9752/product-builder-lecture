@@ -385,49 +385,46 @@ function updateInternalClassifierUI(analysis) {
 
 async function setupAI(stream) {
     const statusLabel = document.getElementById('ai-loader');
-    if(statusLabel) statusLabel.textContent = "⏳ AI 시스템 연결 확인 중...";
+    if(statusLabel) statusLabel.textContent = "⏳ AI 엔진 라이브러리 연결 중...";
     
     try {
-        // 1. Wait for library presence (up to 15 seconds)
-        let loader = null;
-        for (let i = 0; i < 30; i++) {
-            loader = window.yamnet || (window.tf && window.tf.models ? window.tf.models.yamnet : null);
-            if (loader) break;
-            
-            // Fallback: Check common package names
-            if (window['@tensorflow-models/yamnet']) {
-                loader = window['@tensorflow-models/yamnet'];
+        // 1. Wait for TFJS to be ready (up to 10s)
+        let tfReady = false;
+        for (let i = 0; i < 20; i++) {
+            if (typeof tf !== 'undefined') {
+                await tf.ready();
+                tfReady = true;
                 break;
             }
-            
             await new Promise(r => setTimeout(r, 500));
-            console.log("Searching for AI Engine...");
+        }
+        if (!tfReady) throw new Error("TFJS 엔진 로드 실패");
+
+        // 2. Wait for YAMNet library (up to 10s)
+        let loader = null;
+        for (let i = 0; i < 20; i++) {
+            loader = window.yamnet || 
+                     (window.tf && window.tf.models ? window.tf.models.yamnet : null) ||
+                     window['@tensorflow-models/yamnet'];
+            if (loader) break;
+            await new Promise(r => setTimeout(r, 500));
         }
 
-        if (!loader) {
-            throw new Error("AI 라이브러리 접근 실패 (보안 정책 확인 필요)");
-        }
-
-        // 2. Performance Tuning for Mobile
-        if (window.tf) {
-            // Prefer WebGL, fallback to CPU
-            await tf.ready();
-            console.log("TF Backend:", tf.getBackend());
-        }
+        if (!loader) throw new Error("분석 라이브러리(YAMNet) 탐색 실패");
 
         // 3. Load Model
-        if(statusLabel) statusLabel.textContent = "⏳ 분석 엔진 데이터를 로드 중...";
+        if(statusLabel) statusLabel.textContent = "⏳ AI 모델 데이터를 다운로드 중...";
         yamnetModel = await loader.load();
         
         if(statusLabel) {
-            statusLabel.textContent = "✅ AI 분석 시스템 가동 완료";
+            statusLabel.textContent = "✅ AI 소음 분석 준비 완료";
             statusLabel.style.color = "var(--primary-color)";
         }
-        console.log("AI setup completed successfully");
+        console.log("AI setup completed successfully with version 4.17.0");
     } catch (e) {
-        console.error("Critical AI Setup Error:", e);
+        console.error("AI Setup Error:", e);
         if(statusLabel) {
-            statusLabel.innerHTML = `⚠️ AI 로드 실패: ${e.message}<br><button onclick="location.reload()" style="background:var(--primary-color); color:white; border:none; padding:5px 10px; border-radius:4px; margin-top:5px;">새로고침</button>`;
+            statusLabel.innerHTML = `⚠️ AI 로드 실패: ${e.message}<br><button onclick="location.reload()" style="background:var(--primary-color); color:white; border:none; padding:5px 10px; border-radius:4px; margin-top:5px;">다시 시도</button>`;
             statusLabel.style.color = "#f44336";
         }
     }
