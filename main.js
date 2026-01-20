@@ -385,48 +385,72 @@ function updateInternalClassifierUI(analysis) {
 
 async function setupAI(stream) {
     const statusLabel = document.getElementById('ai-loader');
-    if(statusLabel) statusLabel.textContent = "⏳ AI 시스템 초기화 중...";
+    if(statusLabel) statusLabel.textContent = "⏳ AI 엔진 라이브러리 연결 중...";
     
+    // Function to inject script dynamically with fallback
+    const injectScript = (url) => {
+        return new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = url;
+            script.onload = resolve;
+            script.onerror = reject;
+            document.head.appendChild(script);
+        });
+    };
+
     try {
-        // 1. Wait for TFJS to be ready
-        let retryCount = 0;
-        while (typeof tf === 'undefined' && retryCount < 20) {
-            await new Promise(r => setTimeout(r, 500));
-            retryCount++;
+        // 1. Ensure TFJS is ready
+        if (typeof tf === 'undefined') {
+            throw new Error("기본 엔진(TFJS) 로딩 실패");
         }
-        
-        if (typeof tf === 'undefined') throw new Error("연산 엔진(TFJS) 로드 실패");
-        
-        // Ensure backend is initialized (WebGL/WASM)
         await tf.ready();
 
-        // 2. Wait for YAMNet library
-        let loader = window.yamnet || (window.tf && window.tf.models ? window.tf.models.yamnet : null);
-        if (!loader) {
-            for (let i = 0; i < 15; i++) {
-                loader = window.yamnet || (window.tf && window.tf.models ? window.tf.models.yamnet : null);
-                if (loader) break;
-                await new Promise(r => setTimeout(r, 500));
+        // 2. Load YAMNet Library Dynamically (Try Multiple CDNs)
+        let libraryLoaded = false;
+        const cdns = [
+            "https://cdn.jsdelivr.net/npm/@tensorflow-models/yamnet@1.0.0/dist/yamnet.min.js",
+            "https://unpkg.com/@tensorflow-models/yamnet@1.0.0/dist/yamnet.min.js"
+        ];
+
+        for (let url of cdns) {
+            try {
+                if(statusLabel) statusLabel.textContent = `⏳ 라이브러리 연결 시도 중...`;
+                await injectScript(url);
+                libraryLoaded = true;
+                break;
+            } catch (e) {
+                console.warn(`CDN failed: ${url}`);
             }
         }
-        
-        if (!loader) throw new Error("AI 분석 라이브러리 탐색 실패");
 
-        // 3. Load Model
-        if(statusLabel) statusLabel.textContent = "⏳ AI 모델 데이터를 다운로드 중...";
+        if (!libraryLoaded) throw new Error("모든 서버(CDN) 연결 실패");
+
+        // 3. Find the loaded object
+        let loader = window.yamnet || (window.tf && window.tf.models ? window.tf.models.yamnet : null);
+        
+        // Final search loop
+        if (!loader) {
+            for (let i = 0; i < 10; i++) {
+                loader = window.yamnet;
+                if (loader) break;
+                await new Promise(r => setTimeout(r, 300));
+            }
+        }
+
+        if (!loader) throw new Error("분석 도구를 시스템에 등록하지 못했습니다.");
+
+        // 4. Load Model
+        if(statusLabel) statusLabel.textContent = "⏳ 소음 분석 지식 다운로드 중...";
         yamnetModel = await loader.load();
         
         if(statusLabel) {
             statusLabel.textContent = "✅ AI 소음 분석 준비 완료";
             statusLabel.style.color = "var(--primary-color)";
         }
-        console.log("YAMNet successfully initialized");
     } catch (e) {
         console.error("AI Setup Error:", e);
-        // Ensure e.message exists, otherwise convert e to string
-        const errorDetail = e.message || String(e) || "알 수 없는 초기화 오류";
         if(statusLabel) {
-            statusLabel.innerHTML = `⚠️ AI 로드 실패: ${errorDetail}<br><small>네트워크 또는 브라우저 보안 설정을 확인해 주세요.</small>`;
+            statusLabel.innerHTML = `⚠️ AI 로드 실패: ${e.message}<br><button onclick="location.reload()" style="background:var(--primary-color); color:white; border:none; padding:5px 10px; border-radius:4px; margin-top:5px;">다시 시도</button>`;
             statusLabel.style.color = "#f44336";
         }
     }
