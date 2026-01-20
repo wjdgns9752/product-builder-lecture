@@ -385,49 +385,40 @@ function updateInternalClassifierUI(analysis) {
 
 async function setupAI(stream) {
     const statusLabel = document.getElementById('ai-loader');
-    if(statusLabel) statusLabel.textContent = "⏳ AI 분석 모듈 연결 중...";
+    if(statusLabel) statusLabel.textContent = "⏳ AI 엔진 라이브러리 대기 중...";
     
     try {
-        // 1. Ensure Base TFJS Engine
-        for (let i = 0; i < 20; i++) {
-            if (window.tf) break;
-            await new Promise(r => setTimeout(r, 500));
-        }
-        if (!window.tf) throw new Error("기본 연산 엔진(TFJS) 로드 실패");
+        // 1. Wait for TFJS
         await tf.ready();
 
-        // 2. Load YAMNet via Dynamic ESM Import (The most robust way)
-        if(statusLabel) statusLabel.textContent = "⏳ 라이브러리 직접 가져오기 중...";
-        
-        let yamnetModule;
-        try {
-            // Try to import as a module directly
-            yamnetModule = await import('https://cdn.jsdelivr.net/npm/@tensorflow-models/yamnet@1.0.0/+esm');
-        } catch (esmError) {
-            console.warn("ESM import failed, falling back to global search");
-            // Fallback to searching global if ESM fails
-            yamnetModule = window.yamnet || 
-                           (window.tf && window.tf.models ? window.tf.models.yamnet : null);
+        // 2. Simple Wait for Global YAMNet (0.0.1 always exposes this)
+        let loader = null;
+        for (let i = 0; i < 40; i++) { // Wait 20 seconds max
+            if (window.yamnet) {
+                loader = window.yamnet;
+                break;
+            }
+            await new Promise(r => setTimeout(r, 500));
         }
 
-        if (!yamnetModule) throw new Error("분석 도구를 불러올 수 없습니다. (지원되지 않는 브라우저)");
+        if (!loader) {
+            // Last ditch effort: Check if it's hidden in tf.models
+            if (tf.models && tf.models.yamnet) loader = tf.models.yamnet;
+        }
 
-        // 3. Load Model Data
-        if(statusLabel) statusLabel.textContent = "⏳ 소음 데이터베이스 로드 중 (3MB)...";
-        
-        // Some modules export 'load' directly, others as a property
-        const loadFn = yamnetModule.load || yamnetModule;
-        if (typeof loadFn !== 'function') throw new Error("분석 도구 형식이 올바르지 않습니다.");
-        
-        yamnetModel = await loadFn();
+        if (!loader) throw new Error("YAMNet 라이브러리가 로드되지 않았습니다. (서버 연결 실패)");
+
+        // 3. Load Model
+        if(statusLabel) statusLabel.textContent = "⏳ AI 모델 다운로드 중...";
+        yamnetModel = await loader.load();
         
         if(statusLabel) {
             statusLabel.textContent = "✅ AI 소음 분석 준비 완료";
             statusLabel.style.color = "var(--primary-color)";
         }
-        console.log("AI setup completed via ESM/Hybrid");
+        console.log("AI setup successful (v0.0.1)");
     } catch (e) {
-        console.error("Critical AI Setup Error:", e);
+        console.error("AI Setup Critical Error:", e);
         if(statusLabel) {
             statusLabel.innerHTML = `⚠️ AI 로드 실패: ${e.message}<br><button onclick="location.reload()" style="background:var(--primary-color); color:white; border:none; padding:5px 10px; border-radius:4px; margin-top:5px;">새로고침</button>`;
             statusLabel.style.color = "#f44336";
