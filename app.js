@@ -380,8 +380,8 @@ window.startCalibration = async function() {
     if(modal) {
         modal.classList.remove('hidden');
         modal.style.display = 'flex';
-        // Auto start pink noise for convenience
-        if(!isPlayingNoise) playPinkNoise();
+        // Auto start pink noise for convenience -> REMOVED per user request
+        // if(!isPlayingNoise) playPinkNoise();
     } else {
         alert("설정 화면 로드 오류");
     }
@@ -435,30 +435,17 @@ async function analyzeNoiseCharacteristics() {
     try {
         const inputData = yamnetAudioBuffer.slice(yamnetAudioBuffer.length - YAMNET_INPUT_SIZE);
         
-        // Execute Model (Input: [16000])
-        const waveform = tf.tensor(inputData);
-        // YAMNet expects [N] or [1, N] depending on signature, usually [N] for raw waveform
-        const [scores, embeddings, log_mel_spectrogram] = yamnetModel.predict(waveform);
+        // Execute Model using high-level API
+        // High-level API predict() takes Float32Array and returns array of {className: string, probability: number}
+        const predictions = await yamnetModel.predict(inputData);
         
-        // Get top score
-        const scoreData = await scores.data();
-        const meanScores = scoreData.slice(0, 521); // Simple mean if multiple frames, but we send 1s so usually 1 frame logic or needs averaging
-        
-        // Find Max
-        let maxScore = 0;
-        let maxIndex = 0;
-        
-        // Get Top 3 Predictions for Detail View
-        const top3 = [];
-        const scoreArray = Array.from(meanScores).map((s, i) => ({ s, i }));
-        scoreArray.sort((a, b) => b.s - a.s);
-        
-        for(let k=0; k<3; k++) {
-            const item = scoreArray[k];
-            if (item.s > 0.05) { // 5% threshold
-                top3.push(`${YAMNET_CLASSES[item.i]} (${(item.s*100).toFixed(0)}%)`);
-            }
+        if (!predictions || predictions.length === 0) {
+            isModelProcessing = false;
+            return { label: 'none', score: 0 };
         }
+
+        // Find Top 3 Predictions for Detail View
+        const top3 = predictions.slice(0, 3).map(p => `${p.className} (${(p.probability*100).toFixed(0)}%)`);
         
         // Update UI with Raw Details
         const logEl = document.getElementById('ai-detail-log');
@@ -468,7 +455,8 @@ async function analyzeNoiseCharacteristics() {
             logText.textContent = top3.join(', ');
         }
 
-        const rawLabel = YAMNET_CLASSES[maxIndex] || 'none';
+        const rawLabel = predictions[0].className || 'none';
+        const maxScore = predictions[0].probability || 0;
         
         // Update Pipeline UI with "Decision Persistence" (Keep for 3 seconds)
         const recEl = document.getElementById('ai-step-recognition');
@@ -498,8 +486,6 @@ async function analyzeNoiseCharacteristics() {
             }
         }
 
-        // Cleanup
-        tf.dispose([waveform, scores, embeddings, log_mel_spectrogram]);
         isModelProcessing = false;
         
         // Map UI Label
@@ -719,7 +705,7 @@ async function startAudio() {
 
     initBtn.style.display = 'none';
     recordBtn.classList.remove('hidden'); // Show record button
-    if(quickCalibBtn) quickCalibBtn.classList.remove('hidden');
+    // quickCalibBtn should stay visible as requested.
     
     if (!isMonitoring) {
         isMonitoring = true;
@@ -762,7 +748,6 @@ async function startAudio() {
             microphone.connect(analyser);
         }
         initBtn.style.display = 'none';
-        if(quickCalibBtn) quickCalibBtn.classList.remove('hidden');
         
         if (!isMonitoring) {
             isMonitoring = true;
