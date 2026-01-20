@@ -387,35 +387,45 @@ async function setupAI(stream) {
     const statusLabel = document.getElementById('ai-loader');
     if(statusLabel) statusLabel.textContent = "⏳ AI 엔진 라이브러리 확인 중...";
     
+    // Step 1: Detect or Dynamically Load Library
+    let loader = null;
     try {
-        // Find loader through multiple possible global paths
-        let loader = null;
-        for (let i = 0; i < 20; i++) { // Wait up to 10 seconds
-            loader = window.yamnet || 
-                     (window.tf && window.tf.models ? window.tf.models.yamnet : null) ||
-                     window['@tensorflow-models/yamnet'];
-            
+        for (let i = 0; i < 15; i++) { // Wait up to 7.5 seconds
+            loader = window.yamnet || (window.tf && window.tf.models ? window.tf.models.yamnet : null);
             if (loader) break;
             await new Promise(r => setTimeout(r, 500));
-            console.log("Searching for YAMNet library...");
+        }
+
+        // Step 2: Emergency Fallback - Try to inject script if still not found
+        if (!loader) {
+            console.log("Library not found. Attempting emergency script injection...");
+            if(statusLabel) statusLabel.textContent = "⏳ 라이브러리 재연결 중...";
+            
+            await new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = "https://unpkg.com/@tensorflow-models/yamnet@1.0.0/dist/yamnet.min.js";
+                script.onload = resolve;
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+            loader = window.yamnet;
         }
         
-        if (!loader) throw new Error("YAMNet 라이브러리를 찾을 수 없습니다. (CDN 로드 실패)");
+        if (!loader) throw new Error("모든 경로에서 AI 라이브러리를 찾을 수 없습니다.");
 
-        if(statusLabel) statusLabel.textContent = "⏳ AI 모델 데이터를 다운로드 중...";
-        
-        // Load the model
+        // Step 3: Load Model Data
+        if(statusLabel) statusLabel.textContent = "⏳ AI 모델 데이터를 받는 중 (약 3MB)...";
         yamnetModel = await loader.load();
         
         if(statusLabel) {
             statusLabel.textContent = "✅ AI 소음 분석 준비 완료";
             statusLabel.style.color = "var(--primary-color)";
         }
-        console.log("YAMNet successfully loaded");
+        console.log("YAMNet successfully initialized");
     } catch (e) {
-        console.error("AI Setup Error:", e);
+        console.error("AI Setup Critical Error:", e);
         if(statusLabel) {
-            statusLabel.innerHTML = `⚠️ AI 로드 실패: ${e.message}<br><small>새로고침을 시도해 주세요.</small>`;
+            statusLabel.innerHTML = `⚠️ AI 로드 실패: ${e.message}<br><small>인터넷 연결을 확인하고 새로고침해 주세요.</small>`;
             statusLabel.style.color = "#f44336";
         }
     }
