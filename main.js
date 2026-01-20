@@ -385,92 +385,44 @@ function updateInternalClassifierUI(analysis) {
 
 async function setupAI(stream) {
     const statusLabel = document.getElementById('ai-loader');
-    if(statusLabel) statusLabel.textContent = "⏳ AI 엔진 내부 생성 중...";
+    if(statusLabel) statusLabel.textContent = "⏳ AI 엔진 대기 중...";
     
-    // Bypass CDN blocking by fetching text content and creating Blob URL
-    // Firewalls often block <script src="..."> but allow fetch() text
-    const loadBypassedScript = async (url) => {
-        try {
-            const response = await fetch(url);
-            if (!response.ok) throw new Error("Fetch failed");
-            const scriptText = await response.text();
-            const blob = new Blob([scriptText], { type: 'text/javascript' });
-            const blobUrl = URL.createObjectURL(blob);
-            
-            return new Promise((resolve, reject) => {
-                const script = document.createElement('script');
-                script.src = blobUrl;
-                script.onload = () => {
-                    URL.revokeObjectURL(blobUrl);
-                    resolve();
-                };
-                script.onerror = reject;
-                document.head.appendChild(script);
-            });
-        } catch (e) {
-            console.warn("Bypass load failed:", url);
-            throw e;
-        }
-    };
-
     try {
-        // 1. Load TFJS (Try standard first, then bypass)
-        if (!window.tf) {
-            try {
-                await loadBypassedScript("https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.18.0/dist/tf.min.js");
-            } catch (e) {
-                // Fallback to standard injection if fetch fails (CORS)
-                await new Promise((resolve, reject) => {
-                    const s = document.createElement('script');
-                    s.src = "https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.18.0/dist/tf.min.js";
-                    s.onload = resolve; s.onerror = reject;
-                    document.head.appendChild(s);
-                });
-            }
+        // Simple Wait Logic (Let HTML handle loading)
+        let tfLoaded = false;
+        for(let i=0; i<40; i++) { // Wait 20s
+            if(window.tf) { tfLoaded = true; break; }
+            await new Promise(r => setTimeout(r, 500));
         }
+        if(!tfLoaded) throw new Error("TFJS 엔진 로드 실패");
+        
         await tf.ready();
 
-        // 2. Load YAMNet (Bypass Mode)
-        if (!window.yamnet) {
-            try {
-                await loadBypassedScript("https://cdn.jsdelivr.net/npm/@tensorflow-models/yamnet@0.0.1/dist/yamnet.min.js");
-            } catch (e) {
-                await new Promise((resolve, reject) => {
-                    const s = document.createElement('script');
-                    s.src = "https://unpkg.com/@tensorflow-models/yamnet@0.0.1/dist/yamnet.min.js";
-                    s.onload = resolve; s.onerror = reject;
-                    document.head.appendChild(s);
-                });
+        let yamnetLoaded = false;
+        for(let i=0; i<40; i++) {
+            if(window.yamnet || (window.tf.models && window.tf.models.yamnet)) {
+                yamnetLoaded = true; 
+                break; 
             }
+            await new Promise(r => setTimeout(r, 500));
         }
+        if(!yamnetLoaded) throw new Error("YAMNet 분석 도구 로드 실패");
 
-        // 3. Initialize
-        if(statusLabel) statusLabel.textContent = "⏳ 분석 엔진 가동...";
-        
-        let loader = window.yamnet || (window.tf.models ? window.tf.models.yamnet : null);
-        if (!loader) {
-             // Last resort wait
-             for(let i=0; i<10; i++) {
-                 loader = window.yamnet;
-                 if(loader) break;
-                 await new Promise(r => setTimeout(r, 200));
-             }
-        }
-        
-        if (!loader) throw new Error("엔진 생성 실패");
-
+        // Load Model
+        const loader = window.yamnet || window.tf.models.yamnet;
+        if(statusLabel) statusLabel.textContent = "⏳ 모델 데이터 다운로드...";
         yamnetModel = await loader.load();
         
         if(statusLabel) {
             statusLabel.textContent = "✅ AI 소음 분석 준비 완료";
             statusLabel.style.color = "var(--primary-color)";
         }
-        console.log("AI Setup Success (Bypass Mode)");
+        console.log("AI Setup Success (Simple Mode)");
 
     } catch (e) {
         console.error("AI Setup Error:", e);
         if(statusLabel) {
-            statusLabel.innerHTML = `⚠️ 오류: ${e.message}<br><small>와이파이를 끄고 다시 시도해주세요.</small>`;
+            statusLabel.innerHTML = `⚠️ 오류: ${e.message}<br><small>네트워크 상태를 확인해주세요.</small>`;
             statusLabel.style.color = "#f44336";
         }
     }
