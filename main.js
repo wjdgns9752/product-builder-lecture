@@ -385,29 +385,39 @@ function updateInternalClassifierUI(analysis) {
 
 async function setupAI(stream) {
     const statusLabel = document.getElementById('ai-loader');
-    if(statusLabel) statusLabel.textContent = "⏳ AI 엔진 확인 중...";
-    
-    // Retry logic to wait for library loading
-    let loader = null;
-    for (let i = 0; i < 10; i++) { // Try for 5 seconds
-        loader = window.yamnet || (window.tf && window.tf.models ? window.tf.models.yamnet : null);
-        if (loader) break;
-        await new Promise(r => setTimeout(r, 500));
-        console.log(`Waiting for YAMNet library... (${i+1}/10)`);
-    }
+    if(statusLabel) statusLabel.textContent = "⏳ AI 엔진 라이브러리 확인 중...";
     
     try {
-        if (loader) {
-            if(statusLabel) statusLabel.textContent = "⏳ AI 모델 로딩 중...";
-            yamnetModel = await loader.load();
-            if(statusLabel) statusLabel.textContent = "✅ AI 소음 분석 준비 완료";
-            console.log("YAMNet successfully initialized");
-        } else {
-            throw new Error("YAMNet library not found after waiting");
+        // Find loader through multiple possible global paths
+        let loader = null;
+        for (let i = 0; i < 20; i++) { // Wait up to 10 seconds
+            loader = window.yamnet || 
+                     (window.tf && window.tf.models ? window.tf.models.yamnet : null) ||
+                     window['@tensorflow-models/yamnet'];
+            
+            if (loader) break;
+            await new Promise(r => setTimeout(r, 500));
+            console.log("Searching for YAMNet library...");
         }
+        
+        if (!loader) throw new Error("YAMNet 라이브러리를 찾을 수 없습니다. (CDN 로드 실패)");
+
+        if(statusLabel) statusLabel.textContent = "⏳ AI 모델 데이터를 다운로드 중...";
+        
+        // Load the model
+        yamnetModel = await loader.load();
+        
+        if(statusLabel) {
+            statusLabel.textContent = "✅ AI 소음 분석 준비 완료";
+            statusLabel.style.color = "var(--primary-color)";
+        }
+        console.log("YAMNet successfully loaded");
     } catch (e) {
-        console.error("AI Setup Failed:", e);
-        if(statusLabel) statusLabel.textContent = "⚠️ AI 로드 실패 (새로고침 권장)";
+        console.error("AI Setup Error:", e);
+        if(statusLabel) {
+            statusLabel.innerHTML = `⚠️ AI 로드 실패: ${e.message}<br><small>새로고침을 시도해 주세요.</small>`;
+            statusLabel.style.color = "#f44336";
+        }
     }
     return true;
 }
