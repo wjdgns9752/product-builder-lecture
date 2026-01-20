@@ -422,8 +422,13 @@ const YAMNET_CLASSES = [
 ];
 
 async function setupAI(stream) {
+    const sysBar = document.getElementById('system-status-bar');
     const statusLabel = document.getElementById('ai-loader');
-    if(statusLabel) statusLabel.textContent = "⏳ AI 엔진 직접 연결 중...";
+    
+    if(sysBar) { sysBar.style.display = 'block'; sysBar.textContent = "⏳ AI 엔진 다운로드 중..."; }
+    if(statusLabel) statusLabel.textContent = "⏳ AI 엔진 다운로드 중...";
+    
+    // Internal Script Loader (Self-contained)
     
     try {
         await tf.ready();
@@ -697,12 +702,16 @@ thresholdSlider.addEventListener('input', (e) => {
   thresholdVal.textContent = e.target.value;
 });
 
+// Watchdog for Analysis Loop
+let watchdogTimer = null;
+
 // --- Audio Functions ---
 async function startAudio() {
   try {
     if (audioContext && audioContext.state === 'closed') {
         audioContext = null;
     }
+    // ... (Existing setup code) ...
 
     if (!audioContext) {
       audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -745,6 +754,15 @@ async function startAudio() {
         statusText.textContent = "상태: 안정화 중..."; // Update status
         analyze();
         drawSpectrogram();
+        
+        // Start Watchdog
+        if(watchdogTimer) clearInterval(watchdogTimer);
+        watchdogTimer = setInterval(() => {
+            if(isMonitoring && Date.now() - lastAnalysisTime > 2000) {
+                console.warn("Analysis loop stalled. Restarting...");
+                analyze();
+            }
+        }, 1000);
     }
     
     return true; 
@@ -1118,6 +1136,14 @@ function analyze() {
   // Push to Buffer for Advanced Analysis
   dbBuffer.push(calibratedDb);
   if (dbBuffer.length > BUFFER_SIZE) dbBuffer.shift();
+
+  // Show content if data exists
+  const ph = document.getElementById('analysis-placeholder');
+  const ct = document.getElementById('analysis-content');
+  if (ph && ct && dbBuffer.length > 10) {
+      ph.style.display = 'none';
+      ct.style.display = 'block';
+  }
 
   // Run Advanced Analysis & Auto Map every 500ms
   const now = Date.now();
