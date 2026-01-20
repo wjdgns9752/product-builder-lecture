@@ -385,7 +385,7 @@ function updateInternalClassifierUI(analysis) {
 
 async function setupAI(stream) {
     const statusLabel = document.getElementById('ai-loader');
-    if(statusLabel) statusLabel.textContent = "⏳ AI 엔진 초기화 준비 중...";
+    if(statusLabel) statusLabel.textContent = "⏳ AI 시스템 초기화 준비 중...";
     
     try {
         // 1. Wait for TFJS Engine
@@ -397,31 +397,29 @@ async function setupAI(stream) {
             }
             await new Promise(r => setTimeout(r, 500));
         }
-        if (!tfReady) throw new Error("TFJS 엔진 로드 실패 (네트워크 차단)");
+        if (!tfReady) throw new Error("TFJS 엔진 로드 실패 (인터넷 차단)");
 
-        // 2. Set Mobile Backend
-        try {
-            await tf.setBackend('webgl');
-        } catch (e) {
-            console.log("WebGL not supported, falling back to CPU");
-            await tf.setBackend('cpu');
-        }
+        // 2. Performance Backend Setup
         await tf.ready();
+        console.log("Using Backend:", tf.getBackend());
 
-        // 3. Find YAMNet Loader
-        let yamnetLoader = window.yamnet;
-        if (!yamnetLoader) {
-            for (let i = 0; i < 15; i++) {
-                yamnetLoader = window.yamnet || window['@tensorflow-models/yamnet'];
-                if (yamnetLoader) break;
-                await new Promise(r => setTimeout(r, 500));
-            }
+        // 3. Robust YAMNet Search (Multi-path)
+        let yamnetLoader = null;
+        for (let i = 0; i < 20; i++) {
+            // Check all known export paths
+            yamnetLoader = window.yamnet || 
+                           (window['@tensorflow-models'] && window['@tensorflow-models'].yamnet) ||
+                           (window.tf && window.tf.models ? window.tf.models.yamnet : null);
+            
+            if (yamnetLoader) break;
+            await new Promise(r => setTimeout(r, 500));
+            console.log("Searching for YAMNet module...");
         }
 
-        if (!yamnetLoader) throw new Error("분석 모듈 탐색 실패");
+        if (!yamnetLoader) throw new Error("분석 모듈(YAMNet)을 시스템에서 찾을 수 없습니다.");
 
         // 4. Load Model
-        if(statusLabel) statusLabel.textContent = "⏳ AI 분석 모델 다운로드 중...";
+        if(statusLabel) statusLabel.textContent = "⏳ AI 분석 모델을 불러오는 중...";
         yamnetModel = await yamnetLoader.load();
         
         if(statusLabel) {
@@ -430,10 +428,9 @@ async function setupAI(stream) {
         }
     } catch (e) {
         console.error("AI Setup Critical Error:", e);
-        // Step to prevent 'undefined' error display
-        const errorMsg = e.message || (typeof e === 'string' ? e : "초기화 단계 오류");
+        const errorMsg = e.message || "알 수 없는 초기화 오류";
         if(statusLabel) {
-            statusLabel.innerHTML = `⚠️ AI 로드 실패: ${errorMsg}<br><button onclick="location.reload()" style="background:var(--primary-color); color:white; border:none; padding:5px 10px; border-radius:4px; margin-top:5px;">새로고침</button>`;
+            statusLabel.innerHTML = `⚠️ AI 로드 실패: ${errorMsg}<br><button onclick="location.reload()" style="background:var(--primary-color); color:white; border:none; padding:5px 10px; border-radius:4px; margin-top:5px;">페이지 새로고침</button>`;
             statusLabel.style.color = "#f44336";
         }
     }
