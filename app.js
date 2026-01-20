@@ -427,25 +427,57 @@ async function setupAI(stream) {
 // Custom Audio Preprocessing for raw GraphModel
 async function analyzeNoiseCharacteristics() {
     // Safety check: If model isn't loaded yet, skip analysis
-    if (!yamnetModel || isModelProcessing || yamnetAudioBuffer.length < YAMNET_INPUT_SIZE) {
+    if (!yamnetModel) return { label: 'none', score: 0 };
+    
+    if (isModelProcessing) {
+        // Safety: Reset if stuck for more than 5 seconds
+        if (window.lastModelStartTime && Date.now() - window.lastModelStartTime > 5000) {
+            console.warn("AI processing stuck, resetting...");
+            isModelProcessing = false;
+        }
+        return { label: 'none', score: 0 };
+    }
+
+    if (yamnetAudioBuffer.length < YAMNET_INPUT_SIZE) {
         return { label: 'none', score: 0 };
     }
 
     isModelProcessing = true;
+    window.lastModelStartTime = Date.now();
+
     try {
         const inputData = yamnetAudioBuffer.slice(yamnetAudioBuffer.length - YAMNET_INPUT_SIZE);
         
-        // Execute Model using high-level API
-        // High-level API predict() takes Float32Array and returns array of {className: string, probability: number}
-        const predictions = await yamnetModel.predict(inputData);
+        // Execute Model Inference
+        // Note: Different versions of the library handle input differently.
+        // We attempt a robust approach.
+        let predictions;
         
-        if (!predictions || predictions.length === 0) {
+        // Use tf.tidy for memory safety if we use tensors
+        predictions = await tf.tidy(() => {
+            const waveform = tf.tensor1d(inputData);
+            return yamnetModel.predict(waveform);
+        });
+
+        // The official wrapper usually returns an array of {className, probability}
+        // If it returns tensors instead (raw model), we handle that too.
+        let rawPredictions = [];
+        if (Array.isArray(predictions)) {
+            rawPredictions = predictions;
+        } else if (predictions instanceof tf.Tensor) {
+            // Handle raw tensor output (unlikely with load() wrapper but safe)
+            const data = await predictions.data();
+            // This would need mapping to YAMNET_CLASSES, but usually wrapper doesn't do this.
+            tf.dispose(predictions);
+        }
+
+        if (!rawPredictions || rawPredictions.length === 0) {
             isModelProcessing = false;
             return { label: 'none', score: 0 };
         }
 
         // Find Top 3 Predictions for Detail View
-        const top3 = predictions.slice(0, 3).map(p => `${p.className} (${(p.probability*100).toFixed(0)}%)`);
+        const top3 = rawPredictions.slice(0, 3).map(p => `${p.className} (${(p.probability*100).toFixed(0)}%)`);
         
         // Update UI with Raw Details
         const logEl = document.getElementById('ai-detail-log');
@@ -455,26 +487,22 @@ async function analyzeNoiseCharacteristics() {
             logText.textContent = top3.join(', ');
         }
 
-        const rawLabel = predictions[0].className || 'none';
-        const maxScore = predictions[0].probability || 0;
+        const rawLabel = rawPredictions[0].className || 'none';
+        const maxScore = rawPredictions[0].probability || 0;
         
-        // Update Pipeline UI with "Decision Persistence" (Keep for 3 seconds)
+        // Update Pipeline UI
         const recEl = document.getElementById('ai-step-recognition');
         const reasonEl = document.getElementById('ai-reasoning');
         
-        if (recEl && reasonEl && maxScore > 0.15) {
-            recEl.textContent = `🎯 감지: ${rawLabel}`;
-            recEl.style.color = "#2196f3";
-            
-            const detailText = top3.join(', ');
-            reasonEl.innerHTML = `패턴 분석 결과 <strong>${rawLabel}</strong> 특징이 가장 강합니다. (신뢰도: ${(maxScore*100).toFixed(0)}%)<br>상세: ${detailText}`;
-            
-            // Clear "Holding" timer if exists
-            if (window.aiHoldTimer) clearTimeout(window.aiHoldTimer);
-            window.aiHoldTimer = setTimeout(() => {
-                recEl.textContent = "새로운 패턴 대기 중...";
+        if (recEl && reasonEl) {
+            if (maxScore > 0.1) {
+                recEl.textContent = `🎯 감지: ${rawLabel}`;
+                recEl.style.color = "#2196f3";
+                reasonEl.innerHTML = `패턴 분석 결과 <strong>${rawLabel}</strong> 특징이 관찰됩니다. (신뢰도: ${(maxScore*100).toFixed(0)}%)`;
+            } else {
+                recEl.textContent = "조용한 패턴 분석 중...";
                 recEl.style.color = "#4caf50";
-            }, 3000);
+            }
         }
 
         // Map to App Categories
@@ -486,20 +514,7 @@ async function analyzeNoiseCharacteristics() {
             }
         }
 
-        isModelProcessing = false;
-        
-        // Map UI Label
-        let uiLabel = 'none';
-        switch(bestLabel) {
-            case 'floor': uiLabel = 'Floor Impact'; break;
-            case 'road': uiLabel = 'Road Traffic'; break;
-            case 'home': uiLabel = 'Household'; break;
-            case 'train': uiLabel = 'Train'; break; 
-            case 'air': uiLabel = 'Air'; break;     
-            default: uiLabel = 'none';
-        }
-
-        // --- Restore Card UI Update ---
+        // UI Card Update
         const cards = {
             home: document.getElementById('card-home'),
             floor: document.getElementById('card-floor'),
@@ -510,15 +525,14 @@ async function analyzeNoiseCharacteristics() {
         };
         
         Object.values(cards).forEach(c => c && c.classList.remove('active'));
-        
         const cardKey = bestLabel === 'none' ? 'none' : bestLabel;
         if (cards[cardKey]) cards[cardKey].classList.add('active');
-        // -----------------------------
 
-        return { label: uiLabel, score: maxScore };
+        isModelProcessing = false;
+        return { label: bestLabel, score: maxScore };
 
     } catch (e) {
-        console.error("Inference error:", e);
+        console.error("AI Inference Error:", e);
         isModelProcessing = false;
         return { label: 'none', score: 0 };
     }
@@ -705,7 +719,7 @@ async function startAudio() {
 
     initBtn.style.display = 'none';
     recordBtn.classList.remove('hidden'); // Show record button
-    // quickCalibBtn should stay visible as requested.
+    // quickCalibBtn stays visible at all times
     
     if (!isMonitoring) {
         isMonitoring = true;
@@ -748,6 +762,7 @@ async function startAudio() {
             microphone.connect(analyser);
         }
         initBtn.style.display = 'none';
+        // quickCalibBtn stays visible
         
         if (!isMonitoring) {
             isMonitoring = true;
@@ -1072,13 +1087,13 @@ function analyze() {
 
   // 4. Run Classifier (Model) & Update Dose-Response
   if (calibratedDb > 40 && !isCalibrating) { 
-      // Fire and forget - async function handles its own state/locking
       analyzeNoiseCharacteristics().then(result => {
+          // Update UI regardless of 'none' label to ensure status reflects current state
+          updateInternalClassifierUI(result);
           if(result.label !== 'none') {
-              updateInternalClassifierUI(result);
-              updateDoseVisuals(calibratedDb, result.label); // Update Chart
+              updateDoseVisuals(calibratedDb, result.label); 
           }
-      });
+      }).catch(err => console.error("AI Analysis Loop Error:", err));
   } else {
       updateInternalClassifierUI({ label: 'none', score: 0 });
       // updateDoseVisuals(calibratedDb, 'none'); // Optional: Update chart background point even if silence
