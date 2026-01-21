@@ -417,14 +417,17 @@ const CLASS_MAPPING = {
 };
 
 async function analyzeNoiseCharacteristics() {
-    // Safety check: If model isn't loaded yet, skip analysis
+    // Safety check
     if (!yamnetModel) return { label: 'none', score: 0 };
     
+    // Reset stuck processing
     if (isModelProcessing) {
-        if (window.lastModelStartTime && Date.now() - window.lastModelStartTime > 5000) {
+        if (window.lastModelStartTime && Date.now() - window.lastModelStartTime > 2000) {
+            console.warn("Model processing timed out, resetting...");
             isModelProcessing = false;
+        } else {
+            return { label: 'none', score: 0 };
         }
-        return { label: 'none', score: 0 };
     }
 
     if (yamnetAudioBuffer.length < YAMNET_INPUT_SIZE) {
@@ -437,24 +440,44 @@ async function analyzeNoiseCharacteristics() {
     try {
         const inputData = yamnetAudioBuffer.slice(yamnetAudioBuffer.length - YAMNET_INPUT_SIZE);
         
-        // Execute Model with Manual Tensor
-        const inputTensor = tf.tensor(inputData);
-        // Ensure shape is correct if needed, but YAMNet takes 1D usually.
-        const results = yamnetModel.predict(inputTensor);
-        const scores = results.dataSync(); // Get synchronous data
+        // Prepare Tensor: [1, 16000] (Batch size of 1)
+        const inputTensor = tf.tensor(inputData).expandDims(0);
         
-        inputTensor.dispose();
-        results.dispose();
+        // Execute Model
+        const results = yamnetModel.execute(inputTensor); // Use execute for GraphModel
+        
+        // YAMNet typically returns [scores, embeddings, log_mel]. 
+        // We need scores (index 0). 
+        // If results is a single tensor, use it. If array, take first.
+        let scoreTensor;
+        if (Array.isArray(results)) {
+            scoreTensor = results[0];
+        } else {
+            scoreTensor = results;
+        }
 
-        // Create predictions array manually
+        const scores = await scoreTensor.data(); // Async data retrieval
+        
+        // Cleanup
+        inputTensor.dispose();
+        if (Array.isArray(results)) {
+            results.forEach(t => t.dispose());
+        } else {
+            results.dispose();
+        }
+
+        // Map scores to classes
         const predictions = [];
         for(let i=0; i<scores.length; i++) {
-            predictions.push({
-                className: YAMNET_CLASSES[i],
-                probability: scores[i]
-            });
+            if (YAMNET_CLASSES[i]) {
+                predictions.push({
+                    className: YAMNET_CLASSES[i],
+                    probability: scores[i]
+                });
+            }
         }
         
+        // Sort descending
         predictions.sort((a, b) => b.probability - a.probability);
         const rawPredictions = predictions;
 
@@ -472,7 +495,7 @@ async function analyzeNoiseCharacteristics() {
         const maxScore = topPrediction.probability || 0;
 
         if (recEl && reasonEl) {
-            if (maxScore > 0.05) {
+            if (maxScore > 0.02) { // Lower threshold for visibility
                 const top3Names = rawPredictions.slice(0, 3).map(p => `${p.className}(${(p.probability*100).toFixed(0)}%)`).join(', ');
                 recEl.textContent = `🎯 감지: ${rawLabel}`;
                 recEl.style.color = "#2196f3";
@@ -500,7 +523,8 @@ async function analyzeNoiseCharacteristics() {
             }
         }
         
-        if (highestCategoryScore < 0.1) bestLabel = 'none';
+        // Threshold for final decision
+        if (highestCategoryScore < 0.05) bestLabel = 'none';
 
         // Update Card UI
         const cards = {
