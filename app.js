@@ -678,7 +678,7 @@ function autoRecordToMap() {
         
         marker.bindPopup(`<b>${currentVolumeValue.toFixed(1)} dB</b><br>시간: ${timestamp}`);
         noiseHistory.push({ lat, lng, db: currentVolumeValue, marker });
-        saveMapData();
+        saveMapData(); // Persist
         
         if (noiseHistory.length > 50) {
             const old = noiseHistory.shift();
@@ -687,6 +687,42 @@ function autoRecordToMap() {
         lastMapRecordTime = Date.now();
     }, null, { enableHighAccuracy: true });
 }
+
+// --- Map Persistence ---
+function saveMapData() {
+    if (!noiseHistory || noiseHistory.length === 0) return;
+    // Map markers cannot be stringified directly, filter to data
+    const data = noiseHistory.map(h => ({lat: h.lat, lng: h.lng, db: h.db}));
+    localStorage.setItem('noiseMapHistory', JSON.stringify(data));
+}
+
+function loadMapData() {
+    const data = localStorage.getItem('noiseMapHistory');
+    if (data && map) {
+        try {
+            const history = JSON.parse(data);
+            history.forEach(h => {
+                const color = h.db > 65 ? '#f44336' : (h.db > 50 ? '#ffeb3b' : '#4caf50');
+                const marker = L.circleMarker([h.lat, h.lng], {
+                    radius: 8,
+                    fillColor: color,
+                    color: "#fff",
+                    weight: 2,
+                    opacity: 1,
+                    fillOpacity: 0.8
+                }).addTo(map);
+                marker.bindPopup(`<b>${h.db.toFixed(1)} dB</b><br>(Saved)`);
+                // Add to history but without re-saving immediately? 
+                // We add to noiseHistory to keep them on map, but maybe separate saved ones?
+                // For simplicity, just add to map and local array.
+                noiseHistory.push({ lat: h.lat, lng: h.lng, db: h.db, marker });
+            });
+        } catch(e) {
+            console.error("Failed to load map history", e);
+        }
+    }
+}
+
 
 // Survey Elements
 const chipGroups = {
@@ -1183,7 +1219,7 @@ function analyze() {
   }
 
   // 4. Run Classifier (Model) & Update Dose-Response
-  if (calibratedDb > 40 && !isCalibrating) { 
+  if (calibratedDb > 35 && !isCalibrating) { 
       analyzeNoiseCharacteristics().then(result => {
           // Update UI regardless of 'none' label to ensure status reflects current state
           updateInternalClassifierUI(result);
@@ -1193,7 +1229,12 @@ function analyze() {
       }).catch(err => console.error("AI Analysis Loop Error:", err));
   } else {
       updateInternalClassifierUI({ label: 'none', score: 0 });
-      // updateDoseVisuals(calibratedDb, 'none'); // Optional: Update chart background point even if silence
+      // Update Step 2 explicitly for Quiet state
+      const step2 = document.getElementById('ai-step-recognition');
+      if (step2) {
+          step2.innerHTML = "조용함 (AI 분석 대기)<br><span style='font-size:0.65rem; color:#999'>입력 신호가 약합니다 (-35dB)</span>";
+          step2.style.color = "#999";
+      }
   }
 
   // 5. Update Visualizer Data (Octave Bands)
