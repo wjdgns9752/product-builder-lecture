@@ -252,15 +252,37 @@
                     <p id="analysis-comment">데이터를 분석 중입니다. 측정을 시작해 주세요.</p>
                 </div>
 
-                <!-- Noise Fatigue Section -->
-                <div style="margin-top: 20px; padding: 15px; background: #fff3e0; border-radius: 12px; border: 1px solid #ffe0b2;">
-                    <h3 style="margin-top:0; font-size:1rem; color:#e65100;">⚡ 청각 피로도 (Noise Fatigue)</h3>
-                    <p style="font-size:0.8rem; color:#666;">지속적인 소음 노출로 인한 스트레스 누적치를 추정합니다.</p>
-                    <div style="height: 10px; background: #e0e0e0; border-radius: 5px; overflow: hidden; margin-top: 10px;">
-                        <div id="fatigue-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #4caf50, #f44336); transition: width 0.5s;"></div>
+                <!-- Advanced Research Metrics -->
+                <div style="margin-top: 25px;">
+                    <h3 style="font-size:1rem; color:#333; border-bottom:2px solid #eee; padding-bottom:5px;">📊 전문 분석 지표 (Research Metrics)</h3>
+                    
+                    <div class="metrics-grid" style="grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
+                        <!-- Harmonica Index -->
+                        <div class="metric-box" style="background:#e3f2fd; border-color:#90caf9;">
+                            <span class="m-label">Harmonica</span>
+                            <span class="m-value" id="val-harmonica">0.0</span>
+                            <div class="m-desc">종합 소음 평가지수</div>
+                        </div>
+                        
+                        <!-- Intrusiveness -->
+                        <div class="metric-box" style="background:#fff3e0; border-color:#ffcc80;">
+                            <span class="m-label">침입성 (Intrusive)</span>
+                            <span class="m-value" id="val-intrusive">0.0</span>
+                            <div class="m-desc">배경 대비 돌출 정도</div>
+                        </div>
+
+                        <!-- IR -->
+                        <div class="metric-box" style="background:#f3e5f5; border-color:#ce93d8;">
+                            <span class="m-label">불규칙성 (IR)</span>
+                            <span class="m-value" id="val-ir-research">0.0</span>
+                            <div class="m-desc">변동성 지표</div>
+                        </div>
                     </div>
-                    <div style="text-align: right; font-size: 0.8rem; font-weight: bold; margin-top: 5px; color: #bf360c;">
-                        누적 피로도: <span id="fatigue-val">0</span>%
+
+                    <!-- Trend Chart -->
+                    <div class="chart-container" style="margin-top: 15px; height: 220px;">
+                        <h4 style="font-size:0.85rem; color:#666; margin-bottom:5px;">🕒 시간대별 변동 추이</h4>
+                        <canvas id="harmonicaTrendChart"></canvas>
                     </div>
                 </div>
                 </div> <!-- End of analysis-content -->

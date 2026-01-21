@@ -44,9 +44,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Init Chart immediately if possible
     if (typeof initProbChart === 'function') {
         initProbChart();
+            initHarmonicaChart();
     } else {
         // Retry if defined later (though it should be hoisted)
-        setTimeout(() => { if(typeof initProbChart === 'function') initProbChart(); }, 1000);
+        setTimeout(() => { if(typeof initProbChart === 'function') initProbChart();
+            initHarmonicaChart(); }, 1000);
     }
 
     const btn = document.getElementById('init-btn');
@@ -430,6 +432,7 @@ async function setupAI(stream) {
         if(sysBar) {
             sysMsg.textContent = "✅ AI 준비 완료";
             initProbChart();
+            initHarmonicaChart();
             setTimeout(() => sysBar.style.display = 'none', 2000);
         }
 
@@ -1351,13 +1354,41 @@ function analyze() {
 }
 
 // --- Advanced Analysis Function ---
+
+function initHarmonicaChart() {
+    const ctx = document.getElementById('harmonicaTrendChart');
+    if (!ctx) return;
+    
+    harmonicaChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: Array(30).fill(''),
+            datasets: [
+                { label: 'Harmonica', data: Array(30).fill(null), borderColor: '#2196f3', tension: 0.4, pointRadius: 0 },
+                { label: 'Intrusive', data: Array(30).fill(null), borderColor: '#ff9800', tension: 0.4, pointRadius: 0 },
+                { label: 'IR', data: Array(30).fill(null), borderColor: '#9c27b0', tension: 0.4, pointRadius: 0 }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: { beginAtZero: true, grid: { display: false } },
+                x: { display: false }
+            },
+            plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } },
+            animation: { duration: 0 }
+        }
+    });
+}
+
 function updateAnalysis() {
     if (dbBuffer.length < 5) return;
 
-    // 1. Basic Stats (L90, L10, Leq)
+    // 1. Basic Stats
     const sortedDb = [...dbBuffer].sort((a, b) => a - b);
-    const L90 = sortedDb[Math.floor(sortedDb.length * 0.1)];
-    const L10 = sortedDb[Math.floor(sortedDb.length * 0.9)];
+    const L90 = sortedDb[Math.floor(sortedDb.length * 0.1)]; // Background
+    const L10 = sortedDb[Math.floor(sortedDb.length * 0.9)]; // Peak
     const maxDb = Math.max(...dbBuffer);
     
     let sumEnergy = 0;
@@ -1375,52 +1406,76 @@ function updateAnalysis() {
     }
     
     const Leq = 10 * Math.log10(sumEnergy / dbBuffer.length);
-    const stdDev = Math.sqrt(sumSqDiff / dbBuffer.length); // Irregularity
+    const stdDev = Math.sqrt(sumSqDiff / dbBuffer.length); 
 
-    // 2. Determine Pitch Character (using Centroid)
-    // Centroid 0-1024 (approx half FFT size). 
-    // Low < 100, Mid < 300, High > 300 (Empirical)
+    // 2. Research Metrics Calculation
+    // IR (Intermittency Ratio / Irregularity) approx: L10 - L90
+    // Intrusiveness: Leq - L90
+    // Harmonica Index: L90 + 2 * (L10 - L90) -> Background + 2 * Fluctuation
+    
+    const IR = L10 - L90;
+    const Intrusiveness = Math.max(0, Leq - L90);
+    const Harmonica = L90 + 2 * IR;
+
+    // 3. Pitch Character
     let pitchLabel = "중음";
     let pitchColor = "#4caf50";
     if (currentCentroid < 50) { pitchLabel = "저음 (웅~)"; pitchColor = "#795548"; }
     else if (currentCentroid > 200) { pitchLabel = "고음 (쇳소리)"; pitchColor = "#f44336"; }
 
-    // 3. Update UI
+    // 4. Update UI Elements
     const valL90 = document.getElementById('val-l90');
-    // New Advanced Metrics
+    // Research Metrics UI
+    const valHarmonica = document.getElementById('val-harmonica');
+    const valIntrusive = document.getElementById('val-intrusive');
+    const valIrResearch = document.getElementById('val-ir-research');
+    
+    if (valL90) valL90.textContent = L90.toFixed(1);
+    if (valHarmonica) valHarmonica.textContent = Harmonica.toFixed(1);
+    if (valIntrusive) valIntrusive.textContent = Intrusiveness.toFixed(1);
+    if (valIrResearch) valIrResearch.textContent = IR.toFixed(1);
+
+    // Old Impulse UI (kept for dashboard consistency if elements exist)
     const valImpulse = document.getElementById('val-impulse');
     const barImpulse = document.getElementById('bar-impulse');
-    const valIrregular = document.getElementById('val-irregular');
-    const valPitch = document.getElementById('val-pitch');
-
-    if (valL90) valL90.textContent = L90.toFixed(1);
-
     if (valImpulse) valImpulse.textContent = currentImpulse.toFixed(0);
     if (barImpulse) barImpulse.style.width = `${Math.min(100, currentImpulse)}%`;
     
-    if (valIrregular) valIrregular.textContent = stdDev.toFixed(1);
+    const valIrregular = document.getElementById('val-irregular');
+    if (valIrregular) valIrregular.textContent = stdDev.toFixed(1); // Keep StdDev for 'Var'
     
+    const valPitch = document.getElementById('val-pitch');
     if (valPitch) {
         valPitch.textContent = pitchLabel;
         valPitch.style.color = pitchColor;
     }
 
-    // 4. Event Detection & Logging
-    // Trigger if Impulse > 30 OR Leq > 70 (Loud)
-    // Cooldown check
+    // 5. Update Trend Chart
+    if (harmonicaChart) {
+        const labels = harmonicaChart.data.labels;
+        const dHarmonica = harmonicaChart.data.datasets[0].data;
+        const dIntrusive = harmonicaChart.data.datasets[1].data;
+        const dIR = harmonicaChart.data.datasets[2].data;
+        
+        // Shift
+        dHarmonica.shift(); dHarmonica.push(Harmonica);
+        dIntrusive.shift(); dIntrusive.push(Intrusiveness);
+        dIR.shift(); dIR.push(IR);
+        
+        harmonicaChart.update('none'); // Efficient update
+    }
+
+    // 6. Event Detection & Logging
     const now = Date.now();
     if ((currentImpulse > 30 || Leq > 70) && (now - lastEventTime > EVENT_COOLDOWN_MS)) {
         lastEventTime = now;
         
-        // Create Event Log Entry
         const timeStr = new Date().toLocaleTimeString();
         let eventType = "알 수 없음";
         
-        // Use latest AI prediction if available
         if (typeof latestPredictionText !== 'undefined' && latestPredictionText && !latestPredictionText.includes("대기")) {
             eventType = latestPredictionText.split('(')[0].trim();
         } else {
-            // Fallback heuristics
             if (currentImpulse > 50) eventType = "충격음 (쿵!)";
             else if (currentCentroid > 200) eventType = "고주파 소음";
             else eventType = "지속 소음";
@@ -1438,7 +1493,6 @@ function updateAnalysis() {
             logList.prepend(li);
             if (logList.children.length > 5 && logList.lastElementChild) logList.lastElementChild.remove();
             
-            // Remove "Empty" placeholder
             const emptyMsg = logList.querySelector('li[style*="text-align:center"]');
             if (emptyMsg) emptyMsg.remove();
         }
@@ -1449,21 +1503,22 @@ function updateAnalysis() {
     const comment = document.getElementById('analysis-comment');
     
     if (badge && comment) {
-        if (Leq > 70) {
+        if (Harmonica > 80) { // Using Harmonica Index for status
             badge.textContent = "위험";
             badge.className = "badge impulsive";
-            comment.textContent = "심한 소음! 장시간 노출 시 난청 위험이 있습니다.";
-        } else if (Leq > 55) {
-            badge.textContent = "경고";
+            comment.textContent = "심각한 소음 스트레스 환경입니다. (HI > 80)";
+        } else if (Harmonica > 65) {
+            badge.textContent = "주의";
             badge.className = "badge intermittent";
-            comment.textContent = "조용한 집중이 불가능한 수준입니다.";
+            comment.textContent = "다소 시끄럽습니다. 휴식이 필요합니다.";
         } else {
-            badge.textContent = "양호";
+            badge.textContent = "쾌적";
             badge.className = "badge steady";
-            comment.textContent = "안정적이고 쾌적한 소음 수준입니다.";
+            comment.textContent = "안정적인 소음 환경입니다.";
         }
     }
 }
+
 
 // Map Marker Color logic
 function getNoiseColor(db) {
@@ -1804,6 +1859,7 @@ navItems.forEach(nav => {
 
 // --- Dose-Response Analysis (Chart.js) ---
 let doseChart = null;
+let harmonicaChart = null;
 const doseCtx = document.getElementById('doseResponseChart');
 
 function initDoseChart() {
