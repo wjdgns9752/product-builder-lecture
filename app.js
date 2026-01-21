@@ -513,29 +513,36 @@ async function analyzeNoiseCharacteristics() {
         // Prepare Tensor: [1, 16000] (Batch size of 1)
         const inputTensor = tf.tensor(inputData).expandDims(0);
         
-        // Execute Model
-        const results = yamnetModel.execute(inputTensor); // Use execute for GraphModel
-        
-        // YAMNet typically returns [scores, embeddings, log_mel]. 
-        // We need scores (index 0). 
-        // If results is a single tensor, use it. If array, take first.
-        let scoreTensor;
-        if (Array.isArray(results)) {
-            scoreTensor = results[0];
-        } else {
-            scoreTensor = results;
-        }
+        // Execute Model with Timeout
+        const inferencePromise = new Promise(async (resolve, reject) => {
+            try {
+                const results = yamnetModel.execute(inputTensor);
+                // Handle results...
+                let scoreTensor;
+                if (Array.isArray(results)) {
+                    scoreTensor = results[0];
+                } else {
+                    scoreTensor = results;
+                }
+                const scores = await scoreTensor.data();
+                
+                // Dispose inside promise to be safe
+                if (Array.isArray(results)) results.forEach(t => t.dispose());
+                else results.dispose();
+                
+                resolve(scores);
+            } catch(e) {
+                reject(e);
+            }
+        });
 
-        const scores = await scoreTensor.data(); // Async data retrieval
-        // console.log("AI Scores Retrieved", scores.length);
+        // 5 Second Timeout
+        const scores = await Promise.race([
+            inferencePromise,
+            new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 5000))
+        ]);
 
-        // Cleanup
         inputTensor.dispose();
-        if (Array.isArray(results)) {
-            results.forEach(t => t.dispose());
-        } else {
-            results.dispose();
-        }
 
         // Map scores to classes
         const predictions = [];
@@ -629,6 +636,12 @@ async function analyzeNoiseCharacteristics() {
 
     } catch (e) {
         console.error("AI Inference Error:", e);
+        // Visual Error Feedback
+        const recEl = document.getElementById('ai-step-recognition');
+        if (recEl) {
+            recEl.innerHTML = `⚠️ 오류: ${e.message}<br><span style='font-size:0.7rem'>다시 시도 중...</span>`;
+            recEl.style.color = "#f44336";
+        }
         isModelProcessing = false;
         return { label: 'none', score: 0 };
     }
