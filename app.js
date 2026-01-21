@@ -236,6 +236,7 @@ let isModelProcessing = false;
 // YAMNet Class Mapping moved to below
 // const CLASS_MAPPING = ... (Removed duplicate)
 
+let latestPredictionText = '';
 // --- Visualizer Helpers (Restored) ---
 const OCTAVE_BANDS = [31.5, 63, 125, 250, 500, 1000];
 let currentOctaveLevels = {};
@@ -494,6 +495,8 @@ async function analyzeNoiseCharacteristics() {
         const rawLabel = topPrediction.className || 'none';
         const maxScore = topPrediction.probability || 0;
 
+        latestPredictionText = `${rawLabel} (${(maxScore*100).toFixed(0)}%)`;
+
         if (recEl && reasonEl) {
             if (maxScore > 0.02) { // Lower threshold for visibility
                 const top3Names = rawPredictions.slice(0, 3).map(p => `${p.className}(${(p.probability*100).toFixed(0)}%)`).join(', ');
@@ -578,6 +581,15 @@ function drawSpectrogram() {
   
   canvasCtx.clearRect(0, 0, width, height);
   canvasCtx.drawImage(tempCanvas, 0, 0);
+
+  // Overlay AI Recognition Text
+  if (latestPredictionText) {
+      canvasCtx.font = "12px sans-serif";
+      canvasCtx.fillStyle = "rgba(0, 0, 0, 0.7)";
+      canvasCtx.fillRect(0, 0, 200, 24);
+      canvasCtx.fillStyle = "#00ff00";
+      canvasCtx.fillText("AI: " + latestPredictionText, 5, 16);
+  }
 }
 
 // Automatic Noise Mapping Logic
