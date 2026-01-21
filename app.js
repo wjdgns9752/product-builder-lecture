@@ -541,7 +541,7 @@ async function analyzeNoiseCharacteristics() {
         const inputData = yamnetAudioBuffer.slice(yamnetAudioBuffer.length - YAMNET_INPUT_SIZE);
         const inputTensor = tf.tensor(inputData); // 1D Tensor [16000]
         
-        // Execute Model with Race Timeout (0.5s limit for real-time feel)
+        // Execute Model with Race Timeout (2s limit for stability)
         const scores = await Promise.race([
             (async () => {
                 const results = yamnetModel.execute(inputTensor);
@@ -551,7 +551,7 @@ async function analyzeNoiseCharacteristics() {
                 else results.dispose();
                 return data;
             })(),
-            new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 500))
+            new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 2000))
         ]);
 
         inputTensor.dispose();
@@ -721,31 +721,33 @@ function drawSpectrogram() {
 // Automatic Noise Mapping Logic
 let lastMapRecordTime = 0;
 function autoRecordToMap() {
-    if (!isMonitoring || !map || Date.now() - lastMapRecordTime < 5000) return;
+    if (!isMonitoring || Date.now() - lastMapRecordTime < 5000) return;
     
     navigator.geolocation.getCurrentPosition((pos) => {
         const lat = pos.coords.latitude;
         const lng = pos.coords.longitude;
-        
         const timestamp = new Date().toLocaleTimeString();
-        let color = currentVolumeValue > 65 ? '#f44336' : (currentVolumeValue > 50 ? '#ffeb3b' : '#4caf50');
+        let marker = null;
+
+        if (map) {
+            let color = currentVolumeValue > 65 ? '#f44336' : (currentVolumeValue > 50 ? '#ffeb3b' : '#4caf50');
+            marker = L.circleMarker([lat, lng], {
+                radius: 8,
+                fillColor: color,
+                color: "#fff",
+                weight: 2,
+                opacity: 1,
+                fillOpacity: 0.8
+            }).addTo(map);
+            marker.bindPopup(`<b>${currentVolumeValue.toFixed(1)} dB</b><br>시간: ${timestamp}`);
+        }
         
-        const marker = L.circleMarker([lat, lng], {
-            radius: 8,
-            fillColor: color,
-            color: "#fff",
-            weight: 2,
-            opacity: 1,
-            fillOpacity: 0.8
-        }).addTo(map);
-        
-        marker.bindPopup(`<b>${currentVolumeValue.toFixed(1)} dB</b><br>시간: ${timestamp}`);
         noiseHistory.push({ lat, lng, db: currentVolumeValue, marker });
         saveMapData(); // Persist
         
         if (noiseHistory.length > 50) {
             const old = noiseHistory.shift();
-            map.removeLayer(old.marker);
+            if (old.marker && map) map.removeLayer(old.marker);
         }
         lastMapRecordTime = Date.now();
     }, null, { enableHighAccuracy: true });
@@ -763,6 +765,12 @@ function loadMapData() {
     const data = localStorage.getItem('noiseMapHistory');
     if (data && map) {
         try {
+            // Clear existing markers to avoid duplicates if re-loading
+            noiseHistory.forEach(h => {
+                if (h.marker && map.hasLayer(h.marker)) map.removeLayer(h.marker);
+            });
+            noiseHistory = []; // Reset and reload
+
             const history = JSON.parse(data);
             history.forEach(h => {
                 const color = h.db > 65 ? '#f44336' : (h.db > 50 ? '#ffeb3b' : '#4caf50');
@@ -774,10 +782,7 @@ function loadMapData() {
                     opacity: 1,
                     fillOpacity: 0.8
                 }).addTo(map);
-                marker.bindPopup(`<b>${h.db.toFixed(1)} dB</b><br>(Saved)`);
-                // Add to history but without re-saving immediately? 
-                // We add to noiseHistory to keep them on map, but maybe separate saved ones?
-                // For simplicity, just add to map and local array.
+                marker.bindPopup(`<b>${h.db.toFixed(1)} dB</b><br>기록됨`);
                 noiseHistory.push({ lat: h.lat, lng: h.lng, db: h.db, marker });
             });
         } catch(e) {
