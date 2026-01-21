@@ -489,6 +489,7 @@ async function analyzeNoiseCharacteristics() {
     window.lastModelStartTime = Date.now();
 
     try {
+        // console.log("AI Analysis Start"); 
         const inputData = yamnetAudioBuffer.slice(yamnetAudioBuffer.length - YAMNET_INPUT_SIZE);
         
         // Prepare Tensor: [1, 16000] (Batch size of 1)
@@ -508,7 +509,8 @@ async function analyzeNoiseCharacteristics() {
         }
 
         const scores = await scoreTensor.data(); // Async data retrieval
-        
+        // console.log("AI Scores Retrieved", scores.length);
+
         // Cleanup
         inputTensor.dispose();
         if (Array.isArray(results)) {
@@ -531,6 +533,8 @@ async function analyzeNoiseCharacteristics() {
         // Sort descending
         predictions.sort((a, b) => b.probability - a.probability);
         const rawPredictions = predictions;
+        
+        // console.log("Top Prediction:", rawPredictions[0]);
 
         if (!rawPredictions || rawPredictions.length === 0) {
             isModelProcessing = false;
