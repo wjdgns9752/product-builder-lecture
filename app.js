@@ -264,7 +264,7 @@ function calculateOctaveLevels(dataArray, bufferLength, sampleRate) {
 
 // Resample audio to 16kHz and add to buffer
 function processAudioForModel(timeData, originalSampleRate) {
-    if (!yamnetModel) return;
+    // if (!yamnetModel) return; // Allow buffer to fill even if model is loading
 
     // Simple Decimation / Linear Interpolation
     const ratio = originalSampleRate / YAMNET_SAMPLE_RATE;
@@ -285,6 +285,14 @@ function processAudioForModel(timeData, originalSampleRate) {
     // Keep buffer at reasonable size (sliding window)
     if (yamnetAudioBuffer.length > YAMNET_INPUT_SIZE + 4000) {
         yamnetAudioBuffer = yamnetAudioBuffer.slice(yamnetAudioBuffer.length - YAMNET_INPUT_SIZE);
+    }
+    
+    // Update Step 2 Debug Info if Waiting
+    const aiStep2 = document.getElementById('ai-step-recognition');
+    if (aiStep2 && aiStep2.textContent.includes('대기 중')) {
+        const bufferPct = Math.min(100, (yamnetAudioBuffer.length / YAMNET_INPUT_SIZE) * 100).toFixed(0);
+        const modelState = yamnetModel ? "준비됨" : "로딩 중";
+        aiStep2.innerHTML = `소리 패턴 대기 중...<br><span style='font-size:0.65rem; color:#999'>(데이터: ${bufferPct}% / AI: ${modelState})</span>`;
     }
 }
 
@@ -1100,6 +1108,15 @@ function analyze() {
     sum += x * x;
   }
   const rms = Math.sqrt(sum / bufferLength);
+  
+  // Visualize Step 1 (Fingerprint) Activity
+  const step1Card = document.querySelector('.step-card'); // First one is Step 1
+  if (step1Card) {
+      const intensity = Math.min(1, rms * 5);
+      step1Card.style.borderColor = `rgba(33, 150, 243, ${0.3 + intensity})`;
+      step1Card.style.boxShadow = `0 0 ${intensity * 10}px rgba(33, 150, 243, ${0.5})`;
+  }
+
   let rawDb = 20 * Math.log10(rms + 0.00001); 
   let calibratedDb = rawDb + dbOffset;
   if (calibratedDb < 0) calibratedDb = 0;
