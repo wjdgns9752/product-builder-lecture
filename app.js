@@ -233,14 +233,8 @@ const YAMNET_SAMPLE_RATE = 16000;
 const YAMNET_INPUT_SIZE = 16000; // ~1 second window
 let isModelProcessing = false;
 
-// YAMNet Class Mapping (Label keywords to App Categories)
-const CLASS_MAPPING = {
-    'floor': ['knock', 'thump', 'thud', 'footsteps', 'bumping', 'impact', 'door'],
-    'home': ['speech', 'conversation', 'laughter', 'domestic', 'vacuum', 'blender', 'water', 'music', 'television'],
-    'road': ['vehicle', 'traffic', 'car', 'bus', 'truck', 'motor', 'siren', 'horn', 'tire'],
-    'train': ['rail', 'train', 'subway', 'metro'],
-    'air': ['aircraft', 'airplane', 'helicopter', 'jet']
-};
+// YAMNet Class Mapping moved to below
+// const CLASS_MAPPING = ... (Removed duplicate)
 
 // --- Visualizer Helpers (Restored) ---
 const OCTAVE_BANDS = [31.5, 63, 125, 250, 500, 1000];
