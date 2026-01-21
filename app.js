@@ -510,12 +510,15 @@ async function analyzeNoiseCharacteristics() {
         // console.log("AI Analysis Start"); 
         const inputData = yamnetAudioBuffer.slice(yamnetAudioBuffer.length - YAMNET_INPUT_SIZE);
         
-        // Prepare Tensor: [1, 16000] (Batch size of 1)
-        const inputTensor = tf.tensor(inputData).expandDims(0);
+        // Prepare Tensor: [16000] (1D Tensor as expected by this specific YAMNet model)
+        const inputTensor = tf.tensor(inputData); 
         
         // Execute Model with Timeout
         const inferencePromise = new Promise(async (resolve, reject) => {
             try {
+                // Some versions of YAMNet expect named inputs {waveform: tensor}
+                // But passing the tensor directly usually works if it's the only input.
+                // If this fails again, we might need: model.execute({waveform: inputTensor})
                 const results = yamnetModel.execute(inputTensor);
                 // Handle results...
                 let scoreTensor;
