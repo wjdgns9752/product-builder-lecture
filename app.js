@@ -818,6 +818,14 @@ const dbBuffer = []; // Stores recent dB values for stats (L90, Leq)
 const BUFFER_SIZE = 300; // Approx 30 seconds (assuming 100ms push)
 let lastAnalysisTime = 0;
 
+// Advanced Metrics Globals
+let lastDbValue = 0;
+let currentImpulse = 0;
+let currentCentroid = 0;
+let recentEvents = [];
+const EVENT_COOLDOWN_MS = 2000;
+let lastEventTime = 0;
+
 // Visualizer State
 let tempCanvas = document.createElement('canvas');
 let tempCtx = tempCanvas.getContext('2d');
@@ -1232,6 +1240,16 @@ function analyze() {
   const dataArray = new Uint8Array(bufferLength);
   analyser.getByteFrequencyData(dataArray);
 
+  // --- Calculate Spectral Centroid ---
+  let sumFreq = 0;
+  let sumAmp = 0;
+  for (let i = 0; i < bufferLength; i++) {
+      sumFreq += i * dataArray[i];
+      sumAmp += dataArray[i];
+  }
+  currentCentroid = sumAmp > 0 ? sumFreq / sumAmp : 0;
+
+
   // 2. Time Domain Data for AI Model
   const timeData = new Float32Array(bufferLength);
   analyser.getFloatTimeDomainData(timeData);
@@ -1258,6 +1276,17 @@ function analyze() {
   let calibratedDb = rawDb + dbOffset;
   if (calibratedDb < 0) calibratedDb = 0;
   currentVolumeValue = calibratedDb;
+
+  // --- Calculate Impulse ---
+  let delta = calibratedDb - lastDbValue;
+  if (delta > 3) { // Rapid rise
+      currentImpulse += delta * 2; 
+  } else {
+      currentImpulse *= 0.9; // Decay
+  }
+  if (currentImpulse > 100) currentImpulse = 100;
+  lastDbValue = calibratedDb;
+
   
   if (!calibModal.classList.contains('hidden')) {
       currentRawDbSpan.textContent = rawDb.toFixed(1);
@@ -1325,25 +1354,95 @@ function analyze() {
 function updateAnalysis() {
     if (dbBuffer.length < 5) return;
 
+    // 1. Basic Stats (L90, L10, Leq)
     const sortedDb = [...dbBuffer].sort((a, b) => a - b);
     const L90 = sortedDb[Math.floor(sortedDb.length * 0.1)];
     const L10 = sortedDb[Math.floor(sortedDb.length * 0.9)];
     const maxDb = Math.max(...dbBuffer);
     
     let sumEnergy = 0;
+    let sumSqDiff = 0;
+    let meanDb = 0;
+    
     for (let db of dbBuffer) {
         sumEnergy += Math.pow(10, db / 10);
+        meanDb += db;
     }
-    const Leq = 10 * Math.log10(sumEnergy / dbBuffer.length);
-
-    // Update Analysis View Elements
-    const valL90 = document.getElementById('val-l90');
-    const valEvent = document.getElementById('val-event');
-    const valMax = document.getElementById('val-max');
+    meanDb /= dbBuffer.length;
     
+    for (let db of dbBuffer) {
+        sumSqDiff += Math.pow(db - meanDb, 2);
+    }
+    
+    const Leq = 10 * Math.log10(sumEnergy / dbBuffer.length);
+    const stdDev = Math.sqrt(sumSqDiff / dbBuffer.length); // Irregularity
+
+    // 2. Determine Pitch Character (using Centroid)
+    // Centroid 0-1024 (approx half FFT size). 
+    // Low < 100, Mid < 300, High > 300 (Empirical)
+    let pitchLabel = "중음";
+    let pitchColor = "#4caf50";
+    if (currentCentroid < 50) { pitchLabel = "저음 (웅~)"; pitchColor = "#795548"; }
+    else if (currentCentroid > 200) { pitchLabel = "고음 (쇳소리)"; pitchColor = "#f44336"; }
+
+    // 3. Update UI
+    const valL90 = document.getElementById('val-l90');
+    // New Advanced Metrics
+    const valImpulse = document.getElementById('val-impulse');
+    const barImpulse = document.getElementById('bar-impulse');
+    const valIrregular = document.getElementById('val-irregular');
+    const valPitch = document.getElementById('val-pitch');
+
     if (valL90) valL90.textContent = L90.toFixed(1);
-    if (valEvent) valEvent.textContent = (Leq - L90).toFixed(1);
-    if (valMax) valMax.textContent = maxDb.toFixed(1);
+
+    if (valImpulse) valImpulse.textContent = currentImpulse.toFixed(0);
+    if (barImpulse) barImpulse.style.width = `${Math.min(100, currentImpulse)}%`;
+    
+    if (valIrregular) valIrregular.textContent = stdDev.toFixed(1);
+    
+    if (valPitch) {
+        valPitch.textContent = pitchLabel;
+        valPitch.style.color = pitchColor;
+    }
+
+    // 4. Event Detection & Logging
+    // Trigger if Impulse > 30 OR Leq > 70 (Loud)
+    // Cooldown check
+    const now = Date.now();
+    if ((currentImpulse > 30 || Leq > 70) && (now - lastEventTime > EVENT_COOLDOWN_MS)) {
+        lastEventTime = now;
+        
+        // Create Event Log Entry
+        const timeStr = new Date().toLocaleTimeString();
+        let eventType = "알 수 없음";
+        
+        // Use latest AI prediction if available
+        if (typeof latestPredictionText !== 'undefined' && latestPredictionText && !latestPredictionText.includes("대기")) {
+            eventType = latestPredictionText.split('(')[0].trim();
+        } else {
+            // Fallback heuristics
+            if (currentImpulse > 50) eventType = "충격음 (쿵!)";
+            else if (currentCentroid > 200) eventType = "고주파 소음";
+            else eventType = "지속 소음";
+        }
+
+        const logList = document.getElementById('noise-event-list');
+        if (logList) {
+            const li = document.createElement('li');
+            li.style.borderBottom = "1px solid #eee";
+            li.style.padding = "4px 0";
+            li.innerHTML = `<span style="color:#666; font-size:0.75rem;">${timeStr}</span> 
+                            <strong style="color:#333;">${eventType}</strong> 
+                            <span style="background:${Leq>70?'#ffebee':'#f1f8e9'}; color:${Leq>70?'#c62828':'#33691e'}; padding:2px 4px; border-radius:4px; font-size:0.7rem;">${Leq.toFixed(0)}dB</span>`;
+            
+            logList.prepend(li);
+            if (logList.children.length > 5 && logList.lastElementChild) logList.lastElementChild.remove();
+            
+            // Remove "Empty" placeholder
+            const emptyMsg = logList.querySelector('li[style*="text-align:center"]');
+            if (emptyMsg) emptyMsg.remove();
+        }
+    }
 
     // Update Analysis Comment
     const badge = document.getElementById('noise-badge');

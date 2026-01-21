@@ -169,25 +169,42 @@
     
                                                                 </section>
 
-            <!-- Harmonica Index (Summary) -->
-            <div class="analysis-dashboard" style="margin-top: 20px;">
-                <h3>📊 실시간 성향 분석 (Harmonica)</h3>
-                <div class="metrics-grid">
+            <!-- Advanced Noise Character Analysis -->
+            <div class="analysis-dashboard" style="margin-top: 20px; background: #f8f9fa; border: 1px solid #eee;">
+                <h3 style="border-bottom: 1px solid #ddd; padding-bottom: 8px;">📊 소음 성향 정밀 분석</h3>
+                
+                <div class="metrics-grid" style="grid-template-columns: 1fr 1fr 1fr;">
+                    <!-- Metric 1: Impulsiveness -->
                     <div class="metric-box">
-                        <span class="m-label">배경 소음 (L90)</span>
-                        <span class="m-value" id="val-l90">-</span>
-                        <div class="m-desc">기본 소음</div>
+                        <span class="m-label">충격성 (Impulse)</span>
+                        <span class="m-value" id="val-impulse" style="color:#f44336">0</span>
+                        <div class="m-desc">쿵! 하는 순간 소음</div>
+                        <div style="width:100%; height:4px; background:#ddd; margin-top:4px; border-radius:2px;">
+                            <div id="bar-impulse" style="width:0%; height:100%; background:#f44336; transition:width 0.2s;"></div>
+                        </div>
                     </div>
-                    <div class="metric-box highlight">
-                        <span class="m-label">돌발 강도 (Event)</span>
-                        <span class="m-value" id="val-event">-</span>
-                        <div class="m-desc">체감 충격</div>
-                    </div>
+                    
+                    <!-- Metric 2: Irregularity -->
                     <div class="metric-box">
-                        <span class="m-label">변동성 (Fluct)</span>
-                        <span class="m-value" id="val-ir">-</span>
-                        <div class="m-desc">변화폭</div>
+                        <span class="m-label">불규칙성 (Var)</span>
+                        <span class="m-value" id="val-irregular">0.0</span>
+                        <div class="m-desc">소리 변화의 심한 정도</div>
                     </div>
+
+                    <!-- Metric 3: Frequency Character -->
+                    <div class="metric-box">
+                        <span class="m-label">주파수 성향</span>
+                        <span class="m-value" id="val-pitch" style="font-size:1rem;">-</span>
+                        <div class="m-desc">저음(웅~) vs 고음(쇳소리)</div>
+                    </div>
+                </div>
+
+                <!-- Recent Event Log -->
+                <div class="event-log-container" style="margin-top: 15px; background: #fff; padding: 10px; border-radius: 8px; border: 1px solid #e0e0e0;">
+                    <h4 style="margin: 0 0 8px 0; font-size: 0.85rem; color: #555;">📋 최근 감지된 소음 이벤트</h4>
+                    <ul id="noise-event-list" style="list-style: none; padding: 0; margin: 0; font-size: 0.8rem; color: #333; height: 80px; overflow-y: auto;">
+                        <li style="color:#999; text-align:center; padding-top:20px;">아직 감지된 이벤트가 없습니다.</li>
+                    </ul>
                 </div>
             </div>
         </div>
