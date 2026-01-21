@@ -533,9 +533,9 @@ async function analyzeNoiseCharacteristics() {
     isModelProcessing = true;
     window.lastModelStartTime = Date.now();
     
-    // UI Feedback
-    const recEl = document.getElementById('ai-step-recognition');
-    if (recEl) recEl.innerHTML = "⚡ <span style='color:#ff9800'>AI 분석 중...</span>";
+    // UI Feedback: Start Processing (Removed to prevent flickering)
+    // const recEl = document.getElementById('ai-step-recognition');
+    // if (recEl) recEl.textContent = "⚡ AI 분석 중...";
 
     try {
         const inputData = yamnetAudioBuffer.slice(yamnetAudioBuffer.length - YAMNET_INPUT_SIZE);
@@ -642,6 +642,21 @@ async function analyzeNoiseCharacteristics() {
         
         Object.values(cards).forEach(c => c && c.classList.remove('active'));
         const cardKey = bestCategory === 'none' ? 'none' : bestCategory;
+        
+        // Dynamic Label for 'None' card
+        if (cards.none) {
+            const noneLabel = cards.none.querySelector('.label');
+            if (noneLabel) {
+                if (bestCategory === 'none' && topPredictions[0].probability > 0.1) {
+                    noneLabel.textContent = "기타/미분류";
+                    cards.none.style.background = "#fff3e0"; // Light orange
+                } else {
+                    noneLabel.textContent = "대기 중";
+                    cards.none.style.background = "";
+                }
+            }
+        }
+
         if (cards[cardKey]) {
             cards[cardKey].classList.add('active');
             // Visual pulse effect for active card
@@ -1336,7 +1351,7 @@ function analyze() {
   // Show content if data exists
   const ph = document.getElementById('analysis-placeholder');
   const ct = document.getElementById('analysis-content');
-  if (ph && ct && dbBuffer.length > 10) {
+  if (ph && ct && dbBuffer.length > 0) {
       ph.style.display = 'none';
       ct.style.display = 'block';
   }
