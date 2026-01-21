@@ -215,9 +215,10 @@
                 <h2>📊 소음 정밀 분석</h2>
                 
                 <!-- Empty State Placeholder -->
-                <div id="analysis-placeholder" style="text-align:center; padding:40px 20px; color:#999;">
-                    <div style="font-size:2rem; margin-bottom:10px;">📉</div>
-                    <p>아직 수집된 데이터가 없습니다.<br>'측정' 탭에서 모니터링을 시작해주세요.</p>
+                <div id="analysis-placeholder" style="text-align:center; padding:60px 20px; color:#999;">
+                    <div style="font-size:3rem; margin-bottom:15px; opacity:0.5;">📊</div>
+                    <h3 style="margin:0; color:#555;">데이터 수집 중...</h3>
+                    <p style="font-size:0.9rem; margin-top:5px;">정밀 분석을 위해 소음 데이터를 모으고 있습니다.<br>(약 5~10초 후 결과가 표시됩니다)</p>
                 </div>
 
                 <div id="analysis-content" style="display:none;">
@@ -295,7 +296,9 @@
                 <h2>🗺️ 실시간 소음 지도</h2>
                 <p class="subtitle">이동 경로에 따른 소음 히트맵</p>
                 
-                <div id="map-container" style="height: 350px; border-radius: 12px; margin: 15px 0; border: 2px solid #ddd;"></div>
+                <div id="map-container" style="height: 350px; border-radius: 12px; margin: 15px 0; border: 2px solid #ddd; background:#eee; display:flex; align-items:center; justify-content:center;">
+                    <span style="color:#777;">🗺️ 지도 로딩 중... (위치 권한 확인 필요)</span>
+                </div>
                 
                 <div class="controls">
                     <button id="btn-update-location" class="secondary-btn">📍 내 위치로 이동</button>

@@ -671,7 +671,7 @@ async function analyzeNoiseCharacteristics() {
         console.error("AI Inference Error:", e);
         // Error Feedback
         const recEl = document.getElementById('ai-step-recognition');
-        if (recEl) recEl.innerHTML = `<span style='color:red'>⚠️ 분석 지연/오류</span>`;
+        if (recEl) recEl.innerHTML = `<span style='color:red'>⚠️ 오류: ${e.message}</span>`;
         
         isModelProcessing = false;
         return { label: 'none', score: 0 };
