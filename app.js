@@ -228,6 +228,7 @@ const downloadLink = document.getElementById('download-recording');
 // 기존의 1/1 옥타브 밴드 분석을 경량화 딥러닝 모델(YAMNet)로 대체합니다.
 
 let yamnetModel = null;
+let aiProbChart = null;
 let yamnetAudioBuffer = []; // Resampled audio buffer (16kHz)
 const YAMNET_SAMPLE_RATE = 16000;
 const YAMNET_INPUT_SIZE = 16000; // ~1 second window
@@ -414,6 +415,7 @@ async function setupAI(stream) {
         
         if(sysBar) {
             sysMsg.textContent = "✅ AI 준비 완료";
+            initProbChart();
             setTimeout(() => sysBar.style.display = 'none', 2000);
         }
 
@@ -435,6 +437,35 @@ const CLASS_MAPPING = {
     'train': ['rail', 'train', 'subway', 'metro', 'locomotive', 'railroad'],
     'air': ['aircraft', 'airplane', 'helicopter', 'jet', 'propeller', 'aviation']
 };
+
+
+function initProbChart() {
+    const ctx = document.getElementById('aiProbChart');
+    if (!ctx) return;
+    
+    aiProbChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: [],
+            datasets: [{
+                label: '확률 (%)',
+                data: [],
+                backgroundColor: '#2196f3',
+                borderRadius: 4
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: { display: false, max: 100 },
+                y: { ticks: { font: { size: 10 } } }
+            },
+            plugins: { legend: { display: false } }
+        }
+    });
+}
 
 async function analyzeNoiseCharacteristics() {
     // Safety check
@@ -507,6 +538,15 @@ async function analyzeNoiseCharacteristics() {
         }
 
         // Dashboard Status Update
+        
+        // Update Probability Chart
+        if (aiProbChart) {
+            const top5 = rawPredictions.slice(0, 5);
+            aiProbChart.data.labels = top5.map(p => p.className.substring(0, 15));
+            aiProbChart.data.datasets[0].data = top5.map(p => (p.probability * 100).toFixed(1));
+            aiProbChart.update();
+        }
+
         const recEl = document.getElementById('ai-step-recognition');
         const reasonEl = document.getElementById('ai-reasoning');
         
@@ -589,7 +629,9 @@ function drawSpectrogram() {
   // Draw new frequency data at the right edge
   for (let i = 0; i < bufferLength; i++) {
     const value = dataArray[i];
-    tempCtx.fillStyle = getMagmaColor(value);
+    const percent = value / 255;
+    const hue = (1 - percent) * 240; 
+    tempCtx.fillStyle = `hsl(${hue}, 100%, 50%)`;
     
     // Scale height to focus on audible range
     const y = height - (i / (bufferLength / 2)) * height;
