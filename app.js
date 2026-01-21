@@ -238,6 +238,17 @@ let isModelProcessing = false;
 
 let latestPredictionText = '';
 // --- Visualizer Helpers (Restored) ---
+
+// --- Color Map Helper (Magma-like) ---
+function getMagmaColor(value) {
+    const n = value / 255;
+    if (n < 0.1) return `rgb(0, 0, 0)`; // Black
+    if (n < 0.3) return `rgb(${Math.floor(80*n*3)}, 0, ${Math.floor(80*n*3 + 50)})`; // Deep Purple
+    if (n < 0.6) return `rgb(${Math.floor(180*n)}, ${Math.floor(20*n)}, ${Math.floor(100*n)})`; // Red/Purple
+    if (n < 0.8) return `rgb(255, ${Math.floor(150*(n-0.5)*2)}, 0)`; // Orange
+    return `rgb(255, 255, ${Math.floor(255*(n-0.8)*5)})`; // Yellow/White
+}
+
 const OCTAVE_BANDS = [31.5, 63, 125, 250, 500, 1000];
 let currentOctaveLevels = {};
 
@@ -506,13 +517,13 @@ async function analyzeNoiseCharacteristics() {
         latestPredictionText = `${rawLabel} (${(maxScore*100).toFixed(0)}%)`;
 
         if (recEl && reasonEl) {
-            if (maxScore > 0.02) { // Lower threshold for visibility
+            if (true) { // Always show for debugging
                 const top3Names = rawPredictions.slice(0, 3).map(p => `${p.className}(${(p.probability*100).toFixed(0)}%)`).join(', ');
                 recEl.textContent = `🎯 감지: ${rawLabel}`;
                 recEl.style.color = "#2196f3";
                 reasonEl.innerHTML = `분석 중: <strong>${rawLabel}</strong> 특징이 가장 강함.<br><small>후보: ${top3Names}</small>`;
             } else {
-                recEl.textContent = "소리 패턴 대기 중...";
+                recEl.textContent = `대기 (최대: ${(maxScore*100).toFixed(1)}%)`;
                 recEl.style.color = "#4caf50";
             }
         }
@@ -578,9 +589,7 @@ function drawSpectrogram() {
   // Draw new frequency data at the right edge
   for (let i = 0; i < bufferLength; i++) {
     const value = dataArray[i];
-    const percent = value / 255;
-    const hue = (1 - percent) * 240; 
-    tempCtx.fillStyle = `hsl(${hue}, 100%, 50%)`;
+    tempCtx.fillStyle = getMagmaColor(value);
     
     // Scale height to focus on audible range
     const y = height - (i / (bufferLength / 2)) * height;
@@ -623,6 +632,7 @@ function autoRecordToMap() {
         
         marker.bindPopup(`<b>${currentVolumeValue.toFixed(1)} dB</b><br>시간: ${timestamp}`);
         noiseHistory.push({ lat, lng, db: currentVolumeValue, marker });
+        saveMapData();
         
         if (noiseHistory.length > 50) {
             const old = noiseHistory.shift();
@@ -1689,6 +1699,7 @@ function initMap() {
     }).addTo(map);
 
     mapInitialized = true;
+    loadMapData();
     updateUserLocation();
 }
 
@@ -1727,3 +1738,28 @@ function updateUserLocation() {
 // Bind Update Button
 const locBtn = document.getElementById('btn-update-location');
 if (locBtn) locBtn.addEventListener('click', updateUserLocation);
+
+// --- Map Persistence ---
+function saveMapData() {
+    localStorage.setItem('noiseMapHistory', JSON.stringify(noiseHistory.map(h => ({lat: h.lat, lng: h.lng, db: h.db}))));
+}
+
+function loadMapData() {
+    const data = localStorage.getItem('noiseMapHistory');
+    if (data && map) {
+        const history = JSON.parse(data);
+        history.forEach(h => {
+            const color = h.db > 65 ? '#f44336' : (h.db > 50 ? '#ffeb3b' : '#4caf50');
+            const marker = L.circleMarker([h.lat, h.lng], {
+                radius: 8,
+                fillColor: color,
+                color: "#fff",
+                weight: 2,
+                opacity: 1,
+                fillOpacity: 0.8
+            }).addTo(map);
+            marker.bindPopup(`<b>${h.db.toFixed(1)} dB</b><br>(Saved)`);
+            noiseHistory.push({ lat: h.lat, lng: h.lng, db: h.db, marker });
+        });
+    }
+}
