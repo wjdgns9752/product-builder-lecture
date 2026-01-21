@@ -351,12 +351,10 @@ function updateInternalClassifierUI(analysis) {
 }
 
 // YAMNet Model URL (Direct from TFHub)
-const YAMNET_MODEL_URL = 'https://www.kaggle.com/models/google/yamnet/tfJs/tfjs/1';
+const YAMNET_MODEL_URL = 'https://tfhub.dev/google/tfjs-model/yamnet/tfjs/1';
 
 // Global YAMNet Classes (Simplified)
-const YAMNET_CLASSES = [
- "Speech", "Child speech, kid speaking", "Conversation", "Narration, monologue", "Babbling", "Speech synthesizer", "Shout", "Bellow", "Whoop", "Yell", "Children shouting", "Screaming", "Whispering", "Laughter", "Baby laughter", "Giggle", "Snicker", "Belly laugh", "Chuckles, chortle", "Crying, sobbing", "Baby cry, infant cry", "Whimper", "Wail, moan", "Sigh", "Singing", "Choir", "Yodeling", "Chant", "Mantra", "Male singing", "Female singing", "Child singing", "Synthetic singing", "Rapping", "Humming", "Groan", "Grunt", "Whistling", "Breathing", "Wheeze", "Snoring", "Gasp", "Pant", "Snort", "Cough", "Throat clearing", "Sneeze", "Sniff", "Run", "Shuffle", "Walk, footsteps", "Chewing, mastication", "Biting", "Gargling", "Stomach rumble", "Burping, eructation", "Hiccup", "Fart", "Hands", "Finger snapping", "Clapping", "Heart sounds, heartbeat", "Heart murmur", "Cheering", "Applause", "Chatter", "Crowd", "Hubbub, speech noise, speech babble", "Children playing", "Animal", "Domestic animals, pets", "Dog", "Bark", "Yip", "Howl", "Bow-wow", "Growling", "Whimper (dog)", "Cat", "Purr", "Meow", "Hiss", "Caterwaul", "Livestock, farm animals, working animals", "Horse", "Clip-clop", "Neigh, whinny", "Cattle, bovinae", "Moo", "Cowbell", "Pig", "Oink", "Goat", "Bleat", "Sheep", "Fowl", "Chicken, rooster", "Cluck", "Crowing, cock-a-doodle-doo", "Turkey", "Gobble", "Duck", "Quack", "Goose", "Honk", "Wild animals", "Roaring cats (lions, tigers)", "Roar", "Bird", "Bird vocalization, bird call, bird song", "Chirp, tweet", "Squawk", "Coo", "Crow", "Caw", "Owl", "Hoot", "Bird flight, flapping wings", "Canidae, dogs, wolves", "Rodents, rats, mice", "Mouse", "Patter", "Insect", "Cricket", "Mosquito", "Fly, house fly", "Buzz", "Bee, wasp, etc.", "Frog", "Croak", "Snake", "Rattle", "Whale vocalization", "Music", "Musical instrument", "Plucked string instrument", "Guitar", "Electric guitar", "Bass guitar", "Acoustic guitar", "Steel guitar, slide guitar", "Tapping (guitar technique)", "Strum", "Banjo", "Sitar", "Mandolin", "Zither", "Ukulele", "Ukulele strumming", "String section", "Fiddle", "Violin, fiddle", "Bowed string instrument", "Cello", "Double bass", "Wind instrument, woodwind instrument", "Flute", "Saxophone", "Clarinet", "Harp", "Bell", "Church bell", "Jingle bell", "Bicycle bell", "Tuning fork", "Chime", "Wind chime", "Change ringing (campanology)", "Harmonica", "Accordion", "Bagpipes", "Didgeridoo", "Shofar", "Theremin", "Singing bowl", "Scratch", "Pop", "Snap", "Crack", "Click", "Clatter", "Clunk", "Clank", "Crush", "Knock", "Tap", "Smack, smack", "Thud", "Thump", "Splatter", "Squish", "Squelch", "Crumpling, crinkling", "Tearing", "Beep, bleep", "Ping", "Ding", "Clang", "Squeak", "Creak", "Rustle", "Whir", "Clatter", "Sizzle", "Clicking", "Clickety-clack", "Rumble", "Plop", "Splash, splatter", "Slosh", "Squish", "Drip", "Pour", "Trickle, dribble", "Gush", "Splash", "Slurp", "Spray", "Sprinkler", "Rain", "Raindrop", "Thunder", "Thunderstorm", "Wind", "Rustling leaves", "Wind noise (microphone)", "Storm", "Fire", "Fire crackle", "Vehicle", "Boat, Water vehicle", "Sailboat, sailing ship", "Rowboat, canoe, kayak", "Motorboat, speedboat", "Ship", "Motor vehicle (road)", "Car", "Vehicle horn, car horn, honking", "Toot", "Car alarm", "Power windows, electric windows", "Skidding", "Tire squeal", "Car passing by", "Race car, auto racing", "Truck", "Air brake", "Air horn, truck horn", "Reversing beeps", "Ice cream truck, ice cream van", "Bus", "Emergency vehicle", "Police car (siren)", "Ambulance (siren)", "Fire engine, fire truck (siren)", "Motorcycle", "Traffic noise, roadway noise", "Rail transport", "Train", "Train whistle", "Train horn", "Railroad car, train wagon", "Train wheels squealing", "Subway, metro, underground", "Aircraft", "Aircraft engine", "Jet engine", "Propeller, airscrew", "Helicopter", "Fixed-wing aircraft, airplane", "Silence"
-];
+const YAMNET_CLASSES = ["Speech", "Child speech, kid speaking", "Conversation", "Narration, monologue", "Babbling", "Speech synthesizer", "Shout", "Bellow", "Whoop", "Yell", "Children shouting", "Screaming", "Whispering", "Laughter", "Baby laughter", "Giggle", "Snicker", "Belly laugh", "Chuckle, chortle", "Crying, sobbing", "Baby cry, infant cry", "Whimper", "Wail, moan", "Sigh", "Singing", "Choir", "Yodeling", "Chant", "Mantra", "Child singing", "Synthetic singing", "Rapping", "Humming", "Groan", "Grunt", "Whistling", "Breathing", "Wheeze", "Snoring", "Gasp", "Pant", "Snort", "Cough", "Throat clearing", "Sneeze", "Sniff", "Run", "Shuffle", "Walk, footsteps", "Chewing, mastication", "Biting", "Gargling", "Stomach rumble", "Burping, eructation", "Hiccup", "Fart", "Hands", "Finger snapping", "Clapping", "Heart sounds, heartbeat", "Heart murmur", "Cheering", "Applause", "Chatter", "Crowd", "Hubbub, speech noise, speech babble", "Children playing", "Animal", "Domestic animals, pets", "Dog", "Bark", "Yip", "Howl", "Bow-wow", "Growling", "Whimper (dog)", "Cat", "Purr", "Meow", "Hiss", "Caterwaul", "Livestock, farm animals, working animals", "Horse", "Clip-clop", "Neigh, whinny", "Cattle, bovinae", "Moo", "Cowbell", "Pig", "Oink", "Goat", "Bleat", "Sheep", "Fowl", "Chicken, rooster", "Cluck", "Crowing, cock-a-doodle-doo", "Turkey", "Gobble", "Duck", "Quack", "Goose", "Honk", "Wild animals", "Roaring cats (lions, tigers)", "Roar", "Bird", "Bird vocalization, bird call, bird song", "Chirp, tweet", "Squawk", "Pigeon, dove", "Coo", "Crow", "Caw", "Owl", "Hoot", "Bird flight, flapping wings", "Canidae, dogs, wolves", "Rodents, rats, mice", "Mouse", "Patter", "Insect", "Cricket", "Mosquito", "Fly, housefly", "Buzz", "Bee, wasp, etc.", "Frog", "Croak", "Snake", "Rattle", "Whale vocalization", "Music", "Musical instrument", "Plucked string instrument", "Guitar", "Electric guitar", "Bass guitar", "Acoustic guitar", "Steel guitar, slide guitar", "Tapping (guitar technique)", "Strum", "Banjo", "Sitar", "Mandolin", "Zither", "Ukulele", "Keyboard (musical)", "Piano", "Electric piano", "Organ", "Electronic organ", "Hammond organ", "Synthesizer", "Sampler", "Harpsichord", "Percussion", "Drum kit", "Drum machine", "Drum", "Snare drum", "Rimshot", "Drum roll", "Bass drum", "Timpani", "Tabla", "Cymbal", "Hi-hat", "Wood block", "Tambourine", "Rattle (instrument)", "Maraca", "Gong", "Tubular bells", "Mallet percussion", "Marimba, xylophone", "Glockenspiel", "Vibraphone", "Steelpan", "Orchestra", "Brass instrument", "French horn", "Trumpet", "Trombone", "Bowed string instrument", "String section", "Violin, fiddle", "Pizzicato", "Cello", "Double bass", "Wind instrument, woodwind instrument", "Flute", "Saxophone", "Clarinet", "Harp", "Bell", "Church bell", "Jingle bell", "Bicycle bell", "Tuning fork", "Chime", "Wind chime", "Change ringing (campanology)", "Harmonica", "Accordion", "Bagpipes", "Didgeridoo", "Shofar", "Theremin", "Singing bowl", "Scratching (performance technique)", "Pop music", "Hip hop music", "Beatboxing", "Rock music", "Heavy metal", "Punk rock", "Grunge", "Progressive rock", "Rock and roll", "Psychedelic rock", "Rhythm and blues", "Soul music", "Reggae", "Country", "Swing music", "Bluegrass", "Funk", "Folk music", "Middle Eastern music", "Jazz", "Disco", "Classical music", "Opera", "Electronic music", "House music", "Techno", "Dubstep", "Drum and bass", "Electronica", "Electronic dance music", "Ambient music", "Trance music", "Music of Latin America", "Salsa music", "Flamenco", "Blues", "Music for children", "New-age music", "Vocal music", "A capella", "Music of Africa", "Afrobeat", "Christian music", "Gospel music", "Music of Asia", "Carnatic music", "Music of Bollywood", "Ska", "Traditional music", "Independent music", "Song", "Background music", "Theme music", "Jingle (music)", "Soundtrack music", "Lullaby", "Video game music", "Christmas music", "Dance music", "Wedding music", "Happy music", "Sad music", "Tender music", "Exciting music", "Angry music", "Scary music", "Wind", "Rustling leaves", "Wind noise (microphone)", "Thunderstorm", "Thunder", "Water", "Rain", "Raindrop", "Rain on surface", "Stream", "Waterfall", "Ocean", "Waves, surf", "Steam", "Gurgling", "Fire", "Crackle", "Vehicle", "Boat, Water vehicle", "Sailboat, sailing ship", "Rowboat, canoe, kayak", "Motorboat, speedboat", "Ship", "Motor vehicle (road)", "Car", "Vehicle horn, car horn, honking", "Toot", "Car alarm", "Power windows, electric windows", "Skidding", "Tire squeal", "Car passing by", "Race car, auto racing", "Truck", "Air brake", "Air horn, truck horn", "Reversing beeps", "Ice cream truck, ice cream van", "Bus", "Emergency vehicle", "Police car (siren)", "Ambulance (siren)", "Fire engine, fire truck (siren)", "Motorcycle", "Traffic noise, roadway noise", "Rail transport", "Train", "Train whistle", "Train horn", "Railroad car, train wagon", "Train wheels squealing", "Subway, metro, underground", "Aircraft", "Aircraft engine", "Jet engine", "Propeller, airscrew", "Helicopter", "Fixed-wing aircraft, airplane", "Bicycle", "Skateboard", "Engine", "Light engine (high frequency)", "Dental drill, dentist's drill", "Lawn mower", "Chainsaw", "Medium engine (mid frequency)", "Heavy engine (low frequency)", "Engine knocking", "Engine starting", "Idling", "Accelerating, revving, vroom", "Door", "Doorbell", "Ding-dong", "Sliding door", "Slam", "Knock", "Tap", "Squeak", "Cupboard open or close", "Drawer open or close", "Dishes, pots, and pans", "Cutlery, silverware", "Chopping (food)", "Frying (food)", "Microwave oven", "Blender", "Water tap, faucet", "Sink (filling or washing)", "Bathtub (filling or washing)", "Hair dryer", "Toilet flush", "Toothbrush", "Electric toothbrush", "Vacuum cleaner", "Zipper (clothing)", "Keys jangling", "Coin (dropping)", "Scissors", "Electric shaver, electric razor", "Shuffling cards", "Typing", "Typewriter", "Computer keyboard", "Writing", "Alarm", "Telephone", "Telephone bell ringing", "Ringtone", "Telephone dialing, DTMF", "Dial tone", "Busy signal", "Alarm clock", "Siren", "Civil defense siren", "Buzzer", "Smoke detector, smoke alarm", "Fire alarm", "Foghorn", "Whistle", "Steam whistle", "Mechanisms", "Ratchet, pawl", "Clock", "Tick", "Tick-tock", "Gears", "Pulleys", "Sewing machine", "Mechanical fan", "Air conditioning", "Cash register", "Printer", "Camera", "Single-lens reflex camera", "Tools", "Hammer", "Jackhammer", "Sawing", "Filing (rasp)", "Sanding", "Power tool", "Drill", "Explosion", "Gunshot, gunfire", "Machine gun", "Fusillade", "Artillery fire", "Cap gun", "Fireworks", "Firecracker", "Burst, pop", "Eruption", "Boom", "Wood", "Chop", "Splinter", "Crack", "Glass", "Chink, clink", "Shatter", "Liquid", "Splash, splatter", "Slosh", "Squish", "Drip", "Pour", "Trickle, dribble", "Gush", "Fill (with liquid)", "Spray", "Pump (liquid)", "Stir", "Boiling", "Sonar", "Arrow", "Whoosh, swoosh, swish", "Thump, thud", "Thunk", "Electronic tuner", "Effects unit", "Chorus effect", "Basketball bounce", "Bang", "Slap, smack", "Whack, thwack", "Smash, crash", "Breaking", "Bouncing", "Whip", "Flap", "Scratch", "Scrape", "Rub", "Roll", "Crushing", "Crumpling, crinkling", "Tearing", "Beep, bleep", "Ping", "Ding", "Clang", "Squeal", "Creak", "Rustle", "Whir", "Clatter", "Sizzle", "Clicking", "Clickety-clack", "Rumble", "Plop", "Jingle, tinkle", "Hum", "Zing", "Boing", "Crunch", "Silence", "Sine wave", "Harmonic", "Chirp tone", "Sound effect", "Pulse", "Inside, small room", "Inside, large room or hall", "Inside, public space", "Outside, urban or manmade", "Outside, rural or natural", "Reverberation", "Echo", "Noise", "Environmental noise", "Static", "Mains hum", "Distortion", "Sidetone", "Cacophony", "White noise", "Pink noise", "Throbbing", "Vibration", "Television", "Radio", "Field recording"];
 
 // Global History for Map
 let noiseHistory = [];
@@ -395,19 +393,10 @@ async function setupAI(stream) {
     if(sysMsg) sysMsg.textContent = "⏳ AI 엔진 준비 중...";
 
     try {
-        // Simple Wait Logic (Restored to the working version)
-        let loader = null;
-        for(let i=0; i<40; i++) { // Wait 20s
-            if(aiSkipMode) return true;
-            loader = window.yamnet || (window.tf && window.tf.models ? window.tf.models.yamnet : null);
-            if(loader) break;
-            await new Promise(r => setTimeout(r, 500));
-        }
-
-        if (!loader) throw new Error("엔진 로드 실패 (네트워크 확인)");
-
         if(sysMsg) sysMsg.textContent = "⏳ 모델 초기화 중...";
-        yamnetModel = await loader.load();
+        
+        // Load Graph Model directly from Kaggle/TFHub
+        yamnetModel = await tf.loadGraphModel(YAMNET_MODEL_URL, { fromTFHub: true });
         
         if(sysBar) {
             sysMsg.textContent = "✅ AI 준비 완료";
@@ -424,15 +413,21 @@ async function setupAI(stream) {
 
 // (Removed old DOMContentLoaded listener for calibration to avoid conflicts)
 
-// Custom Audio Preprocessing for raw GraphModel
+// YAMNet Class Mapping (Label keywords to App Categories)
+const CLASS_MAPPING = {
+    'floor': ['knock', 'thump', 'thud', 'footsteps', 'bumping', 'impact', 'door', 'beat', 'tap', 'clatter', 'shuffling', 'walking'],
+    'home': ['speech', 'conversation', 'laughter', 'domestic', 'vacuum', 'blender', 'water', 'music', 'television', 'shout', 'singing', 'baby', 'child', 'bark', 'meow', 'dish', 'glass', 'cooking', 'alarm'],
+    'road': ['vehicle', 'traffic', 'car', 'bus', 'truck', 'motor', 'siren', 'horn', 'tire', 'engine', 'skidding', 'transport', 'emergency'],
+    'train': ['rail', 'train', 'subway', 'metro', 'locomotive', 'railroad'],
+    'air': ['aircraft', 'airplane', 'helicopter', 'jet', 'propeller', 'aviation']
+};
+
 async function analyzeNoiseCharacteristics() {
     // Safety check: If model isn't loaded yet, skip analysis
     if (!yamnetModel) return { label: 'none', score: 0 };
     
     if (isModelProcessing) {
-        // Safety: Reset if stuck for more than 5 seconds
         if (window.lastModelStartTime && Date.now() - window.lastModelStartTime > 5000) {
-            console.warn("AI processing stuck, resetting...");
             isModelProcessing = false;
         }
         return { label: 'none', score: 0 };
@@ -448,73 +443,72 @@ async function analyzeNoiseCharacteristics() {
     try {
         const inputData = yamnetAudioBuffer.slice(yamnetAudioBuffer.length - YAMNET_INPUT_SIZE);
         
-        // Execute Model Inference
-        // Note: Different versions of the library handle input differently.
-        // We attempt a robust approach.
-        let predictions;
+        // Execute Model with Manual Tensor
+        const inputTensor = tf.tensor(inputData);
+        // Ensure shape is correct if needed, but YAMNet takes 1D usually.
+        const results = yamnetModel.predict(inputTensor);
+        const scores = results.dataSync(); // Get synchronous data
         
-        // Use tf.tidy for memory safety if we use tensors
-        predictions = await tf.tidy(() => {
-            const waveform = tf.tensor1d(inputData);
-            return yamnetModel.predict(waveform);
-        });
+        inputTensor.dispose();
+        results.dispose();
 
-        // The official wrapper usually returns an array of {className, probability}
-        // If it returns tensors instead (raw model), we handle that too.
-        let rawPredictions = [];
-        if (Array.isArray(predictions)) {
-            rawPredictions = predictions;
-        } else if (predictions instanceof tf.Tensor) {
-            // Handle raw tensor output (unlikely with load() wrapper but safe)
-            const data = await predictions.data();
-            // This would need mapping to YAMNET_CLASSES, but usually wrapper doesn't do this.
-            tf.dispose(predictions);
+        // Create predictions array manually
+        const predictions = [];
+        for(let i=0; i<scores.length; i++) {
+            predictions.push({
+                className: YAMNET_CLASSES[i],
+                probability: scores[i]
+            });
         }
+        
+        predictions.sort((a, b) => b.probability - a.probability);
+        const rawPredictions = predictions;
 
         if (!rawPredictions || rawPredictions.length === 0) {
             isModelProcessing = false;
             return { label: 'none', score: 0 };
         }
 
-        // Find Top 3 Predictions for Detail View
-        const top3 = rawPredictions.slice(0, 3).map(p => `${p.className} (${(p.probability*100).toFixed(0)}%)`);
-        
-        // Update UI with Raw Details
-        const logEl = document.getElementById('ai-detail-log');
-        const logText = document.getElementById('ai-raw-classes');
-        if (logEl && logText && top3.length > 0) {
-            logEl.style.display = 'block';
-            logText.textContent = top3.join(', ');
-        }
-
-        const rawLabel = rawPredictions[0].className || 'none';
-        const maxScore = rawPredictions[0].probability || 0;
-        
-        // Update Pipeline UI
+        // Dashboard Status Update
         const recEl = document.getElementById('ai-step-recognition');
         const reasonEl = document.getElementById('ai-reasoning');
         
+        const topPrediction = rawPredictions[0];
+        const rawLabel = topPrediction.className || 'none';
+        const maxScore = topPrediction.probability || 0;
+
         if (recEl && reasonEl) {
-            if (maxScore > 0.1) {
+            if (maxScore > 0.05) {
+                const top3Names = rawPredictions.slice(0, 3).map(p => `${p.className}(${(p.probability*100).toFixed(0)}%)`).join(', ');
                 recEl.textContent = `🎯 감지: ${rawLabel}`;
                 recEl.style.color = "#2196f3";
-                reasonEl.innerHTML = `패턴 분석 결과 <strong>${rawLabel}</strong> 특징이 관찰됩니다. (신뢰도: ${(maxScore*100).toFixed(0)}%)`;
+                reasonEl.innerHTML = `분석 중: <strong>${rawLabel}</strong> 특징이 가장 강함.<br><small>후보: ${top3Names}</small>`;
             } else {
-                recEl.textContent = "조용한 패턴 분석 중...";
+                recEl.textContent = "소리 패턴 대기 중...";
                 recEl.style.color = "#4caf50";
             }
         }
 
         // Map to App Categories
         let bestLabel = 'none';
-        for (const [category, keywords] of Object.entries(CLASS_MAPPING)) {
-            if (keywords.some(k => rawLabel.toLowerCase().includes(k))) {
-                bestLabel = category;
-                break;
+        let highestCategoryScore = 0;
+
+        const candidates = rawPredictions.slice(0, 5);
+        for (const pred of candidates) {
+            const labelLower = pred.className.toLowerCase();
+            for (const [category, keywords] of Object.entries(CLASS_MAPPING)) {
+                if (keywords.some(k => labelLower.includes(k))) {
+                    if (pred.probability > highestCategoryScore) {
+                        highestCategoryScore = pred.probability;
+                        bestLabel = category;
+                    }
+                }
             }
         }
+        
+        if (highestCategoryScore < 0.1) bestLabel = 'none';
 
-        // UI Card Update
+        // Update Card UI
         const cards = {
             home: document.getElementById('card-home'),
             floor: document.getElementById('card-floor'),
@@ -529,7 +523,7 @@ async function analyzeNoiseCharacteristics() {
         if (cards[cardKey]) cards[cardKey].classList.add('active');
 
         isModelProcessing = false;
-        return { label: bestLabel, score: maxScore };
+        return { label: bestLabel, score: highestCategoryScore };
 
     } catch (e) {
         console.error("AI Inference Error:", e);
