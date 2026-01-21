@@ -39,6 +39,16 @@ window.startMonitoring = async function() {
 
 // Auto-bind on load (Safety net)
 document.addEventListener('DOMContentLoaded', () => {
+    console.log("App Version: 20260121_FINAL_V4 (Chart Fix)");
+    
+    // Init Chart immediately if possible
+    if (typeof initProbChart === 'function') {
+        initProbChart();
+    } else {
+        // Retry if defined later (though it should be hoisted)
+        setTimeout(() => { if(typeof initProbChart === 'function') initProbChart(); }, 1000);
+    }
+
     const btn = document.getElementById('init-btn');
     if(btn) {
         btn.onclick = window.startMonitoring;
