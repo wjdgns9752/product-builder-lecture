@@ -444,13 +444,40 @@ async function setupAI(stream) {
 // (Removed old DOMContentLoaded listener for calibration to avoid conflicts)
 
 // YAMNet Class Mapping (Label keywords to App Categories)
+// Enhanced Category Mapping
 const CLASS_MAPPING = {
-    'floor': ['knock', 'thump', 'thud', 'footsteps', 'bumping', 'impact', 'door', 'beat', 'tap', 'clatter', 'shuffling', 'walking'],
-    'home': ['speech', 'conversation', 'laughter', 'domestic', 'vacuum', 'blender', 'water', 'music', 'television', 'shout', 'singing', 'baby', 'child', 'bark', 'meow', 'dish', 'glass', 'cooking', 'alarm'],
-    'road': ['vehicle', 'traffic', 'car', 'bus', 'truck', 'motor', 'siren', 'horn', 'tire', 'engine', 'skidding', 'transport', 'emergency'],
-    'train': ['rail', 'train', 'subway', 'metro', 'locomotive', 'railroad'],
-    'air': ['aircraft', 'airplane', 'helicopter', 'jet', 'propeller', 'aviation']
+    'floor': ['knock', 'thump', 'thud', 'footsteps', 'walk', 'run', 'impact', 'door', 'slam', 'tap', 'clatter', 'shuffle', 'drop', 'fall', 'drag', 'jump', 'hop', 'skip', 'stomp'],
+    'home': ['speech', 'conversation', 'talk', 'laugh', 'cry', 'shout', 'yell', 'scream', 'baby', 'child', 'cough', 'sneeze', 'domestic', 'vacuum', 'blender', 'water', 'dish', 'cook', 'fry', 'chop', 'music', 'tv', 'television', 'radio', 'instrument', 'piano', 'guitar', 'phone', 'ring', 'alarm', 'clock', 'dog', 'bark', 'cat', 'meow', 'pet'],
+    'road': ['vehicle', 'traffic', 'car', 'bus', 'truck', 'motor', 'engine', 'horn', 'siren', 'tire', 'skid', 'brake', 'accelerat', 'revving', 'idling', 'street', 'roadway'],
+    'train': ['train', 'rail', 'subway', 'metro', 'underground', 'station', 'locomotive', 'steam', 'whistle'],
+    'air': ['aircraft', 'airplane', 'plane', 'helicopter', 'jet', 'propeller', 'aviation', 'fly', 'flight']
 };
+
+// Korean Translation Map for Common Classes
+const YAMNET_KO_MAP = {
+    'Speech': '말소리', 'Child speech, kid speaking': '아이 말소리', 'Conversation': '대화', 
+    'Shout': '고함', 'Laughter': '웃음소리', 'Crying, sobbing': '울음소리', 'Baby cry, infant cry': '아기 울음',
+    'Knock': '노크/두드림', 'Thump, thud': '쿵 소리', 'Footsteps': '발걸음', 'Walk, footsteps': '걷는 소리', 'Run': '뛰는 소리',
+    'Door': '문 소리', 'Sliding door': '미닫이문', 'Slam': '문 쾅', 'Tap': '톡톡 소리', 'Squeak': '삐걱 소리',
+    'Music': '음악', 'Television': 'TV 소리', 'Radio': '라디오', 'Musical instrument': '악기 소리',
+    'Vacuum cleaner': '청소기', 'Blender': '믹서기', 'Water': '물 소리', 'Water tap, faucet': '수도꼭지', 'Toilet flush': '변기 물내림',
+    'Dishes, pots, and pans': '그릇 달그락', 'Frying (food)': '튀기는 소리', 'Chopping (food)': '칼질 소리',
+    'Vehicle': '차량', 'Motor vehicle (road)': '자동차', 'Car': '승용차', 'Vehicle horn, car horn, honking': '경적', 
+    'Siren': '사이렌', 'Brake': '브레이크', 'Tire squeal': '타이어 소리', 'Traffic noise, roadway noise': '도로 교통',
+    'Rail transport': '철도', 'Train': '기차', 'Subway, metro, underground': '지하철',
+    'Aircraft': '항공기', 'Fixed-wing aircraft, airplane': '비행기', 'Helicopter': '헬리콥터',
+    'Dog': '개 짖는 소리', 'Bark': '멍멍', 'Cat': '고양이', 'Meow': '야옹',
+    'Silence': '조용함', 'Static': '지지직 잡음', 'Noise': '소음', 'White noise': '백색 소음'
+};
+
+function translateLabel(label) {
+    if (YAMNET_KO_MAP[label]) return YAMNET_KO_MAP[label];
+    // Partial match fallback
+    for (const [key, val] of Object.entries(YAMNET_KO_MAP)) {
+        if (label.includes(key)) return val;
+    }
+    return label; // Return original if no match
+}
 
 
 function initProbChart() {
@@ -486,9 +513,9 @@ async function analyzeNoiseCharacteristics() {
     // Safety check
     if (!yamnetModel) return { label: 'none', score: 0 };
     
-    // Reset stuck processing
+    // Reset stuck processing (Fail fast after 3s)
     if (isModelProcessing) {
-        if (window.lastModelStartTime && Date.now() - window.lastModelStartTime > 2000) {
+        if (window.lastModelStartTime && Date.now() - window.lastModelStartTime > 3000) {
             console.warn("Model processing timed out, resetting...");
             isModelProcessing = false;
         } else {
@@ -503,125 +530,104 @@ async function analyzeNoiseCharacteristics() {
     isModelProcessing = true;
     window.lastModelStartTime = Date.now();
     
-    // UI Feedback: Start Processing
+    // UI Feedback
     const recEl = document.getElementById('ai-step-recognition');
-    if (recEl) recEl.textContent = "⚡ AI 분석 중...";
+    if (recEl) recEl.innerHTML = "⚡ <span style='color:#ff9800'>AI 분석 중...</span>";
 
     try {
-        // console.log("AI Analysis Start"); 
         const inputData = yamnetAudioBuffer.slice(yamnetAudioBuffer.length - YAMNET_INPUT_SIZE);
+        const inputTensor = tf.tensor(inputData); // 1D Tensor [16000]
         
-        // Prepare Tensor: [16000] (1D Tensor as expected by this specific YAMNet model)
-        const inputTensor = tf.tensor(inputData); 
-        
-        // Execute Model with Timeout
-        const inferencePromise = new Promise(async (resolve, reject) => {
-            try {
-                // Some versions of YAMNet expect named inputs {waveform: tensor}
-                // But passing the tensor directly usually works if it's the only input.
-                // If this fails again, we might need: model.execute({waveform: inputTensor})
+        // Execute Model with Race Timeout
+        const scores = await Promise.race([
+            (async () => {
                 const results = yamnetModel.execute(inputTensor);
-                // Handle results...
-                let scoreTensor;
-                if (Array.isArray(results)) {
-                    scoreTensor = results[0];
-                } else {
-                    scoreTensor = results;
-                }
-                const scores = await scoreTensor.data();
-                
-                // Dispose inside promise to be safe
+                const scoreTensor = Array.isArray(results) ? results[0] : results;
+                const data = await scoreTensor.data();
                 if (Array.isArray(results)) results.forEach(t => t.dispose());
                 else results.dispose();
-                
-                resolve(scores);
-            } catch(e) {
-                reject(e);
-            }
-        });
-
-        // 5 Second Timeout
-        const scores = await Promise.race([
-            inferencePromise,
-            new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 5000))
+                return data;
+            })(),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 3000))
         ]);
 
         inputTensor.dispose();
 
-        // Map scores to classes
+        // Process Results
         const predictions = [];
         for(let i=0; i<scores.length; i++) {
             if (YAMNET_CLASSES[i]) {
                 predictions.push({
                     className: YAMNET_CLASSES[i],
-                    probability: scores[i]
+                    probability: scores[i],
+                    koName: translateLabel(YAMNET_CLASSES[i])
                 });
             }
         }
         
-        // Sort descending
+        // Sort
         predictions.sort((a, b) => b.probability - a.probability);
-        const rawPredictions = predictions;
-        
-        // console.log("Top Prediction:", rawPredictions[0]);
+        const topPredictions = predictions.slice(0, 5); // Top 5
 
-        if (!rawPredictions || rawPredictions.length === 0) {
-            isModelProcessing = false;
-            return { label: 'none', score: 0 };
-        }
+        // Determine Category (Check top 3 results)
+        let bestCategory = 'none';
+        let categoryScore = 0;
+        let detectedSoundName = topPredictions[0].koName;
 
-        // Dashboard Status Update
-        
-        // Update Probability Chart
-        if (aiProbChart) {
-            const top5 = rawPredictions.slice(0, 5);
-            aiProbChart.data.labels = top5.map(p => p.className.substring(0, 15));
-            aiProbChart.data.datasets[0].data = top5.map(p => (p.probability * 100).toFixed(1));
-            aiProbChart.update();
-        }
+        for (const pred of topPredictions.slice(0, 3)) {
+            // Check threshold for valid detection (e.g. > 10%)
+            if (pred.probability < 0.1) continue; 
 
-        const recEl = document.getElementById('ai-step-recognition');
-        const reasonEl = document.getElementById('ai-reasoning');
-        
-        const topPrediction = rawPredictions[0];
-        const rawLabel = topPrediction.className || 'none';
-        const maxScore = topPrediction.probability || 0;
-
-        latestPredictionText = `${rawLabel} (${(maxScore*100).toFixed(0)}%)`;
-
-        if (recEl && reasonEl) {
-            if (true) { // Always show for debugging
-                const top3Names = rawPredictions.slice(0, 3).map(p => `${p.className}(${(p.probability*100).toFixed(0)}%)`).join(', ');
-                recEl.textContent = `🎯 감지: ${rawLabel}`;
-                recEl.style.color = "#2196f3";
-                reasonEl.innerHTML = `분석 중: <strong>${rawLabel}</strong> 특징이 가장 강함.<br><small>후보: ${top3Names}</small>`;
-            } else {
-                recEl.textContent = `대기 (최대: ${(maxScore*100).toFixed(1)}%)`;
-                recEl.style.color = "#4caf50";
-            }
-        }
-
-        // Map to App Categories
-        let bestLabel = 'none';
-        let highestCategoryScore = 0;
-
-        const candidates = rawPredictions.slice(0, 5);
-        for (const pred of candidates) {
             const labelLower = pred.className.toLowerCase();
             for (const [category, keywords] of Object.entries(CLASS_MAPPING)) {
                 if (keywords.some(k => labelLower.includes(k))) {
-                    if (pred.probability > highestCategoryScore) {
-                        highestCategoryScore = pred.probability;
-                        bestLabel = category;
+                    if (pred.probability > categoryScore) {
+                        categoryScore = pred.probability;
+                        bestCategory = category;
+                        detectedSoundName = pred.koName; // Keep the specific sound name
                     }
                 }
             }
         }
-        
-        // Threshold for final decision
-        if (highestCategoryScore < 0.05) bestLabel = 'none';
 
-        // Update Card UI
+        // Update UI
+        const reasonEl = document.getElementById('ai-reasoning');
+        
+        // 1. Update Chart
+        if (aiProbChart) {
+            aiProbChart.data.labels = topPredictions.map(p => p.koName);
+            aiProbChart.data.datasets[0].data = topPredictions.map(p => (p.probability * 100).toFixed(1));
+            // Highlight the top bar
+            aiProbChart.data.datasets[0].backgroundColor = topPredictions.map((p, i) => i === 0 ? '#ff9800' : '#2196f3');
+            aiProbChart.update();
+        }
+
+        // 2. Update Text
+        const topName = topPredictions[0].koName;
+        const topProb = (topPredictions[0].probability * 100).toFixed(0);
+        
+        latestPredictionText = `${topName} (${topProb}%)`;
+
+        if (recEl && reasonEl) {
+            recEl.innerHTML = `🎯 감지: <strong>${topName}</strong> <small>(${topProb}%)</small>`;
+            recEl.style.color = "#2196f3";
+            
+            if (bestCategory !== 'none') {
+                const catNames = {
+                    'floor': '층간소음', 'home': '생활소음', 'road': '도로교통', 
+                    'train': '철도/지하철', 'air': '항공기'
+                };
+                reasonEl.innerHTML = `분석 결과: <strong>'${detectedSoundName}'</strong> 소리가 감지되어 <strong>[${catNames[bestCategory]}]</strong>으로 분류됩니다.`;
+                reasonEl.style.background = "#e3f2fd";
+                reasonEl.style.borderColor = "#2196f3";
+            } else {
+                reasonEl.innerHTML = `현재 <strong>'${topName}'</strong> 소리가 가장 유력하지만, 특정 카테고리(층간/교통 등)로 분류하기에는 불명확합니다.`;
+                reasonEl.style.background = "#fffde7";
+                reasonEl.style.borderColor = "#fbc02d";
+            }
+        }
+
+        // 3. Update Classification Cards
         const cards = {
             home: document.getElementById('card-home'),
             floor: document.getElementById('card-floor'),
@@ -632,24 +638,28 @@ async function analyzeNoiseCharacteristics() {
         };
         
         Object.values(cards).forEach(c => c && c.classList.remove('active'));
-        const cardKey = bestLabel === 'none' ? 'none' : bestLabel;
-        if (cards[cardKey]) cards[cardKey].classList.add('active');
+        const cardKey = bestCategory === 'none' ? 'none' : bestCategory;
+        if (cards[cardKey]) {
+            cards[cardKey].classList.add('active');
+            // Visual pulse effect for active card
+            cards[cardKey].style.transform = "scale(1.05)";
+            setTimeout(() => cards[cardKey].style.transform = "scale(1)", 200);
+        }
 
         isModelProcessing = false;
-        return { label: bestLabel, score: highestCategoryScore };
+        return { label: bestCategory, score: topPredictions[0].probability };
 
     } catch (e) {
         console.error("AI Inference Error:", e);
-        // Visual Error Feedback
+        // Error Feedback
         const recEl = document.getElementById('ai-step-recognition');
-        if (recEl) {
-            recEl.innerHTML = `⚠️ 오류: ${e.message}<br><span style='font-size:0.7rem'>다시 시도 중...</span>`;
-            recEl.style.color = "#f44336";
-        }
+        if (recEl) recEl.innerHTML = `<span style='color:red'>⚠️ 분석 지연/오류</span>`;
+        
         isModelProcessing = false;
         return { label: 'none', score: 0 };
     }
 }
+
 
 function drawSpectrogram() {
   requestAnimationFrame(drawSpectrogram);
