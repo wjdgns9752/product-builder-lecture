@@ -418,7 +418,11 @@ async function setupAI(stream) {
     if(sysMsg) sysMsg.textContent = "⏳ AI 엔진 준비 중...";
 
     try {
-        if(sysMsg) sysMsg.textContent = "⏳ 모델 초기화 중...";
+        if(sysMsg) sysMsg.textContent = "⏳ 모델 초기화 중... (CPU)";
+        
+        // Force CPU backend for stability
+        await tf.setBackend('cpu');
+        console.log("TF Backend:", tf.getBackend());
         
         // Load Graph Model directly from Kaggle/TFHub
         yamnetModel = await tf.loadGraphModel(YAMNET_MODEL_URL, { fromTFHub: true });
@@ -497,6 +501,10 @@ async function analyzeNoiseCharacteristics() {
 
     isModelProcessing = true;
     window.lastModelStartTime = Date.now();
+    
+    // UI Feedback: Start Processing
+    const recEl = document.getElementById('ai-step-recognition');
+    if (recEl) recEl.textContent = "⚡ AI 분석 중...";
 
     try {
         // console.log("AI Analysis Start"); 
