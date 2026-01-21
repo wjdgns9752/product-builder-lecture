@@ -460,11 +460,11 @@ function initProbChart() {
     aiProbChart = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: [],
+            labels: ['시스템 준비', '대기 중', '-', '-', '-'],
             datasets: [{
                 label: '확률 (%)',
-                data: [],
-                backgroundColor: '#2196f3',
+                data: [100, 0, 0, 0, 0],
+                backgroundColor: ['#4caf50', '#e0e0e0', '#e0e0e0', '#e0e0e0', '#e0e0e0'],
                 borderRadius: 4
             }]
         },
@@ -472,9 +472,10 @@ function initProbChart() {
             indexAxis: 'y',
             responsive: true,
             maintainAspectRatio: false,
+            animation: { duration: 0 }, // Disable initial animation for instant visibility
             scales: {
                 x: { display: false, max: 100 },
-                y: { ticks: { font: { size: 10 } } }
+                y: { ticks: { font: { size: 11, weight: 'bold' } } }
             },
             plugins: { legend: { display: false } }
         }
@@ -1268,6 +1269,13 @@ function analyze() {
       if (step2) {
           step2.innerHTML = `조용함 (AI 분석 대기)<br><span style='font-size:0.65rem; color:#999'>입력 신호가 약합니다 (${calibratedDb.toFixed(1)}dB)</span>`;
           step2.style.color = "#999";
+      }
+      // Update Chart for Quiet
+      if (aiProbChart) {
+          aiProbChart.data.labels = ['조용함', '-', '-', '-', '-'];
+          aiProbChart.data.datasets[0].data = [100, 0, 0, 0, 0];
+          aiProbChart.data.datasets[0].backgroundColor = ['#9e9e9e', '#e0e0e0', '#e0e0e0', '#e0e0e0', '#e0e0e0'];
+          aiProbChart.update();
       }
   }
 
