@@ -513,9 +513,9 @@ async function analyzeNoiseCharacteristics() {
     // Safety check
     if (!yamnetModel) return { label: 'none', score: 0 };
     
-    // Reset stuck processing (Fail fast after 0.1s)
+    // Reset stuck processing (Fail fast after 0.5s)
     if (isModelProcessing) {
-        if (window.lastModelStartTime && Date.now() - window.lastModelStartTime > 100) {
+        if (window.lastModelStartTime && Date.now() - window.lastModelStartTime > 500) {
             console.warn("Model processing timed out, resetting...");
             isModelProcessing = false;
         } else {
@@ -538,7 +538,7 @@ async function analyzeNoiseCharacteristics() {
         const inputData = yamnetAudioBuffer.slice(yamnetAudioBuffer.length - YAMNET_INPUT_SIZE);
         const inputTensor = tf.tensor(inputData); // 1D Tensor [16000]
         
-        // Execute Model with Race Timeout (0.1s limit for extreme real-time feel)
+        // Execute Model with Race Timeout (0.5s limit for real-time feel)
         const scores = await Promise.race([
             (async () => {
                 const results = yamnetModel.execute(inputTensor);
@@ -548,7 +548,7 @@ async function analyzeNoiseCharacteristics() {
                 else results.dispose();
                 return data;
             })(),
-            new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 100))
+            new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 500))
         ]);
 
         inputTensor.dispose();
