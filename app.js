@@ -1229,7 +1229,7 @@ function analyze() {
   }
 
   // 4. Run Classifier (Model) & Update Dose-Response
-  if (calibratedDb > 35 && !isCalibrating) { 
+  if (calibratedDb > 10 && !isCalibrating) { 
       analyzeNoiseCharacteristics().then(result => {
           // Update UI regardless of 'none' label to ensure status reflects current state
           updateInternalClassifierUI(result);
@@ -1242,7 +1242,7 @@ function analyze() {
       // Update Step 2 explicitly for Quiet state
       const step2 = document.getElementById('ai-step-recognition');
       if (step2) {
-          step2.innerHTML = "조용함 (AI 분석 대기)<br><span style='font-size:0.65rem; color:#999'>입력 신호가 약합니다 (-35dB)</span>";
+          step2.innerHTML = `조용함 (AI 분석 대기)<br><span style='font-size:0.65rem; color:#999'>입력 신호가 약합니다 (${calibratedDb.toFixed(1)}dB)</span>`;
           step2.style.color = "#999";
       }
   }
