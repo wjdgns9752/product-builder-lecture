@@ -2355,21 +2355,73 @@ function renderReport() {
     }
 }
 
-    // Hook into existing view switch logic
+        // Hook into existing view switch logic
 
-navItems.forEach(nav => {
+    navItems.forEach(nav => {
 
-    nav.addEventListener('click', () => {
+        nav.addEventListener('click', () => {
 
-        if (nav.dataset.target === 'view-report') {
+            if (nav.dataset.target === 'view-report') {
 
-            renderReport();
+                renderReport();
 
-        }
+                // Force resize charts after tab becomes visible
+
+                setTimeout(() => {
+
+                    Object.values(reportCharts).forEach(chart => {
+
+                        if (chart) {
+
+                            chart.resize();
+
+                            chart.update();
+
+                        }
+
+                    });
+
+                }, 50);
+
+            }
+
+            
+
+            // Settings Tab Visualization
+
+            if (nav.dataset.target === 'view-info') {
+
+                // Update Threshold Display
+
+                if (thresholdVal && thresholdSlider) {
+
+                    thresholdVal.textContent = thresholdSlider.value;
+
+                }
+
+                // Update Auth/Profile Info
+
+                const nick = localStorage.getItem('user_nickname');
+
+                const uid = localStorage.getItem('user_uid');
+
+                const profile = JSON.parse(localStorage.getItem('user_profile') || '{}');
+
+                const offset = localStorage.getItem('dbOffset') || 0;
+
+                
+
+                // If you want to visualize these in the settings tab, ensure elements exist
+
+                // For now, just ensuring the slider and basic inputs are synced
+
+            }
+
+        });
 
     });
 
-});
+    
 
 
 
