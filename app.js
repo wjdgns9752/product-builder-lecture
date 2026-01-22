@@ -1843,19 +1843,38 @@ submitEvalBtn.addEventListener('click', async () => {
   
   try {
     const profile = JSON.parse(localStorage.getItem('user_profile')) || {};
+    
+    // [New] AI Analysis Result
+    const aiPrediction = latestPredictionText || "Unknown";
+
+    // [New] Structured Research Payload
     const payload = {
-      rating: parseInt(selectedRating, 10),
-      noiseLevel: parseFloat(currentVolumeValue.toFixed(1)),
-      backgroundLevel: Math.round(backgroundLevel),
-      context: { activity: surveyData.activity || 'unknown', source: surveyData.source || 'unknown' },
-      userProfile: profile,
+      // 1. Subjective
+      annoyance_rating: parseInt(selectedRating, 10),
+      
+      // 2. Objective
+      leq_db: parseFloat(currentVolumeValue.toFixed(1)),
+      l90_db: Math.round(backgroundLevel),
+      impulsiveness: currentImpulse.toFixed(1),
+      
+      // 3. Classification
+      ai_label: aiPrediction, 
+      user_label: surveyData.source || 'unspecified',
+      
+      // 4. Context
+      location_lat: noiseHistory.length > 0 ? noiseHistory[noiseHistory.length-1].lat : null,
+      location_lng: noiseHistory.length > 0 ? noiseHistory[noiseHistory.length-1].lng : null,
+      housing_type: profile.housingType || 'apartment',
+      floor_level: profile.floorLevel || 'mid',
+      
       userAgent: navigator.userAgent, 
-      timestamp: firebase.firestore.FieldValue.serverTimestamp() // Fixed: Using global firebase object
-      // Note: We are not uploading the audio blob to Firestore here because it requires Storage setup.
-      // The user can download it locally.
+      timestamp: firebase.firestore.FieldValue.serverTimestamp()
     };
-    // Fixed: Using compat syntax
-    await db.collection("noise_evaluations").add(payload);
+
+    // New Collection for Research
+    await db.collection("research_data_2026").add(payload);
+    alert("소중한 연구 데이터가 제출되었습니다. 감사합니다! 🙇");
+
   } catch (err) { console.error(err); }
   hideEvaluationModal();
   lastEvalTime = Date.now();
@@ -2049,11 +2068,8 @@ function initDoseChart() {
 function calcHA(L, type) {
     let val = 0;
     // Normalized to Ldn (Assuming L_current approx Ldn for instant impact visualization)
-    // Formulas usually require Ldn. We treat current Leq as a proxy for "If this noise continued..."
     
     if (type === 'road') {
-        // Road: 9.868*10^-4 * (L-42)^3 ... simplified linear approx for UI speed
-        // Polynomial:
         if (L < 42) return 0;
         val = 9.868e-4 * Math.pow(L-42, 3) - 1.436e-2 * Math.pow(L-42, 2) + 0.5118 * (L-42);
     } else if (type === 'train') {
@@ -2061,11 +2077,36 @@ function calcHA(L, type) {
         val = 7.239e-4 * Math.pow(L-32, 3) - 7.851e-3 * Math.pow(L-32, 2) + 0.1695 * (L-32);
     } else if (type === 'air') {
         if (L < 30) return 0;
-        // Aircraft curve is steeper
         val = 9.868e-4 * Math.pow(L-30, 3) - 1.436e-2 * Math.pow(L-30, 2) + 0.5118 * (L-30); 
     }
     
     return Math.min(100, Math.max(0, val));
+}
+
+// [New] 복합소음 통합 평가 모델 (Integrated Assessment Model)
+// L_air: 항공기, L_road: 도로, L_floor: 층간소음
+function calcTotalAnnoyance(L_air, L_road, L_floor) {
+    // 1. 도로교통 소음 등가치(Road Traffic Noise Equivalent)로 변환
+    // 항공기 소음은 도로 소음보다 약 5~8dB 더 불쾌하다는 페널티 적용
+    const L_air_eq = L_air > 40 ? L_air + 5 : 0; 
+    
+    // 층간소음은 저주파/충격음 특성상 10dB 이상의 페널티 적용 (연구 가설 반영)
+    const L_floor_eq = L_floor > 35 ? L_floor + 10 : 0;
+
+    // 2. 에너지 합산이 아닌 '불쾌감 등가 합산' (Dominant Source + Synergy)
+    // 단순 합산: 10 * log10(10^(L1/10) + ...)
+    // 배경소음(Road)가 기본으로 깔려있다고 가정
+    let sumEnergy = Math.pow(10, L_road/10);
+    if (L_air_eq > 0) sumEnergy += Math.pow(10, L_air_eq/10);
+    if (L_floor_eq > 0) sumEnergy += Math.pow(10, L_floor_eq/10);
+
+    const totalLevel = 10 * Math.log10(sumEnergy);
+
+    // 3. 통합 불쾌감(%HA) 산출 (Miedema Road Curve 적용)
+    if (totalLevel < 42) return 0;
+    const HA = 9.868e-4 * Math.pow(totalLevel-42, 3) - 1.436e-2 * Math.pow(totalLevel-42, 2) + 0.5118 * (totalLevel-42);
+    
+    return Math.min(100, Math.max(0, HA));
 }
 
 function updateDoseVisuals(db, sourceLabel) {
@@ -2076,20 +2117,64 @@ function updateDoseVisuals(db, sourceLabel) {
     let type = 'road'; // default
     if (sourceLabel === 'Train') type = 'train';
     else if (sourceLabel === 'Air') type = 'air';
-    else if (sourceLabel === 'Floor Impact') type = 'road'; // Treat impulsive as road curve for now or separate? Use Road as baseline.
+    else if (sourceLabel === 'Floor Impact') type = 'road'; 
     
     // Update detected source text
     const txt = document.getElementById('detected-source-text');
     if (txt) txt.textContent = sourceLabel !== 'none' ? sourceLabel : '배경 소음';
 
-    const ha = calcHA(db, type);
-    const haSpan = document.getElementById('ha-percent');
-    if (haSpan) haSpan.textContent = ha.toFixed(1);
+    // [New] Integrated Annoyance Calculation
+    // 배경소음(L90/backgroundLevel)을 도로소음 기반으로 가정하고, 
+    // 현재 발생한 이벤트(db)를 해당 소스(Air/Floor)로 가정하여 복합 계산
+    let totalHA = 0;
+    let desc = "안전";
+    
+    // backgroundLevel is global
+    const bg = backgroundLevel || 40;
 
-    // Update Bubble
-    // The bubble dataset is index 3
-    doseChart.data.datasets[3].data = [{x: db, y: ha, r: 8}];
-    doseChart.update('none'); // Efficient update
+    if (sourceLabel === 'Air') {
+        totalHA = calcTotalAnnoyance(db, bg, 0); // 항공(Current) + 도로(BG)
+    } else if (sourceLabel === 'Floor Impact') {
+        totalHA = calcTotalAnnoyance(0, bg, db); // 층간(Current) + 도로(BG)
+    } else {
+        // 도로 또는 기타: 전체를 도로 소음으로 간주
+        totalHA = calcTotalAnnoyance(0, Math.max(db, bg), 0); 
+    }
+
+    const haSpan = document.getElementById('ha-percent');
+    if (haSpan) haSpan.textContent = totalHA.toFixed(1);
+
+    // [New] Update Traffic Light UI
+    const haDisplay = document.getElementById('ha-score-display');
+    const lights = {
+        green: document.getElementById('light-green'),
+        yellow: document.getElementById('light-yellow'),
+        red: document.getElementById('light-red')
+    };
+
+    if (lights.green && lights.yellow && lights.red) {
+        // Reset Opacity
+        lights.green.style.opacity = 0.3;
+        lights.yellow.style.opacity = 0.3;
+        lights.red.style.opacity = 0.3;
+
+        if (totalHA < 10) {
+            lights.green.style.opacity = 1.0;
+            desc = "안전 (쾌적)";
+        } else if (totalHA < 25) {
+            lights.yellow.style.opacity = 1.0;
+            desc = "주의 (신경쓰임)";
+        } else {
+            lights.red.style.opacity = 1.0;
+            desc = "위험 (매우 불쾌)";
+        }
+        
+        if(haDisplay) haDisplay.textContent = `${totalHA.toFixed(1)}% (${desc})`;
+    }
+
+    // Update Bubble in Chart
+    doseChart.data.datasets[3].data = [{x: db, y: totalHA, r: 8}];
+    doseChart.update('none'); 
 }
 
 
@@ -2098,11 +2183,24 @@ function initMap() {
     const mapContainer = document.getElementById('map-container');
     if (!mapContainer) return;
 
-    // Default: Seoul City Hall
-    map = L.map('map-container').setView([37.5665, 126.9780], 15);
+    // Default: Gwangju (Songjeong/Sangmu)
+    map = L.map('map-container').setView([35.137, 126.791], 13);
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    // [New] Noise Contour Overlay (Placeholder)
+    const imageUrl = 'https://via.placeholder.com/800x600.png?text=Gwangju+Noise+Contour+Map'; 
+    const errorOverlayUrl = 'https://cdn-icons-png.flaticon.com/512/110/110686.png';
+    const altText = '광주 항공기 소음 등고선';
+    const latLngBounds = L.latLngBounds([[35.160, 126.750], [35.110, 126.850]]); // Approx area
+
+    L.imageOverlay(imageUrl, latLngBounds, {
+        opacity: 0.4,
+        errorOverlayUrl: errorOverlayUrl,
+        alt: altText,
+        interactive: false
     }).addTo(map);
 
     mapInitialized = true;
