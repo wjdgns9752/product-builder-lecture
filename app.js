@@ -1931,20 +1931,41 @@ navItems.forEach(nav => {
         
         // Special Init for Analysis
         if (targetId === 'view-analysis') {
+            // 1. Ensure Charts Exist (Lazy Init)
             if (!doseChart) initDoseChart();
             if (!harmonicaChart) initHarmonicaChart();
             
-            // Force resize/update for charts that were hidden
+            // 2. Force Resize (Critical for Chart.js in Tabs)
             setTimeout(() => {
-                if (doseChart) { doseChart.resize(); doseChart.update(); }
-                if (harmonicaChart) { harmonicaChart.resize(); harmonicaChart.update(); }
+                if (doseChart) { doseChart.resize(); }
+                if (harmonicaChart) { harmonicaChart.resize(); }
+                
+                // 3. Populate & Update Charts from Buffer
+                if (harmonicaChart && dbBuffer.length > 0) {
+                    // Regenerate chart data from buffer trends (simulated for demo)
+                    // In a real app, we would have history. Here we just ensure it's not empty.
+                    const dHarmonica = harmonicaChart.data.datasets[0].data;
+                    const dIntrusive = harmonicaChart.data.datasets[1].data;
+                    const dIR = harmonicaChart.data.datasets[2].data;
+                    
+                    // Fill if empty
+                    if (dHarmonica[0] === null || dHarmonica[0] === undefined) {
+                         for(let i=0; i<30; i++) {
+                            dHarmonica[i] = 50 + Math.random() * 20;
+                            dIntrusive[i] = 10 + Math.random() * 10;
+                            dIR[i] = 5 + Math.random() * 5;
+                        }
+                    }
+                    harmonicaChart.update();
+                }
+                
+                updateAnalysis(); // Updates text stats
+                
+                if (currentVolumeValue > 0 || dbBuffer.length > 0) {
+                    // Update Dose Bubble
+                    updateDoseVisuals(currentVolumeValue || 60, 'Road Traffic');
+                }
             }, 50);
-
-            // Update analysis with current buffer data
-            updateAnalysis();
-            if (currentVolumeValue > 0) {
-                updateDoseVisuals(currentVolumeValue, 'none'); 
-            }
         }
     });
 });
@@ -2717,9 +2738,8 @@ function populateDemoData() {
         saveMapData();
     }
 
-    // 3. Analysis Data (dbBuffer & Charts)
+    // 3. Analysis Data (dbBuffer)
     // Check if buffer is empty OR if we need to force visuals for demo
-    // If buffer is small (< 50) or average level is very low (silence), inject demo data
     const isSilent = dbBuffer.length > 0 && (dbBuffer.reduce((a,b)=>a+b,0)/dbBuffer.length < 35);
     
     if (dbBuffer.length < 50 || isSilent) {
@@ -2734,42 +2754,9 @@ function populateDemoData() {
             dbBuffer.push(val);
         }
         
-        // Force init charts if missing
-        if (!harmonicaChart && typeof initHarmonicaChart === 'function') initHarmonicaChart();
-        if (!doseChart && typeof initDoseChart === 'function') initDoseChart();
-
-        // Populate Harmonica Chart History
-        if (harmonicaChart) {
-            const dataLen = harmonicaChart.data.labels.length; // usually 30
-            const dHarmonica = harmonicaChart.data.datasets[0].data;
-            const dIntrusive = harmonicaChart.data.datasets[1].data;
-            const dIR = harmonicaChart.data.datasets[2].data;
-
-            for(let i=0; i<dataLen; i++) {
-                dHarmonica[i] = 50 + Math.random() * 20;
-                dIntrusive[i] = 10 + Math.random() * 10;
-                dIR[i] = 5 + Math.random() * 5;
-            }
-            harmonicaChart.update();
-        }
-
-        // Populate Dose Chart Point
-        if (doseChart) {
-            updateDoseVisuals(65, 'Road Traffic');
-        }
-
-        // Force update analysis UI text
-        updateAnalysis();
-    }
-    
-    // Force update Report UI with demo data
-    renderReport();
-
-    // OPTIONAL: If user is on a "blank" view, refresh it
-    const activeView = document.querySelector('.view.active');
-    if (activeView && activeView.id === 'view-analysis') {
-        if(doseChart) doseChart.update();
-        if(harmonicaChart) harmonicaChart.update();
+        // Note: Charts are NOT initialized here. 
+        // They will be initialized/updated when the user switches to the Analysis/Report tab.
+        // This prevents "canvas has no size" errors.
     }
 }
 
