@@ -79,50 +79,187 @@ async function stopAudioLogic() {
 window.startMonitoring = window.toggleMonitoring;
 window.stopMonitoring = window.toggleMonitoring;
 
-// Auto-bind on load (Safety net)
+// [Fix] Enhanced Navigation & Rendering Logic
 document.addEventListener('DOMContentLoaded', () => {
-    console.log("App Version: 20260121_FINAL_V6 (Emergency Fix & Research Update)");
+    console.log("📱 UI Initializing...");
+
+    const navItems = document.querySelectorAll('.nav-item');
+    const views = document.querySelectorAll('.view');
+
+    // 1. Reset all views
+    views.forEach(v => {
+        v.classList.remove('active');
+        v.classList.add('hidden'); // Ensure hidden class logic if used
+    });
     
-    // 1. Force Monitor View Active
+    // Force Monitor view active
     const monitorView = document.getElementById('view-monitor');
     if (monitorView) {
-        monitorView.classList.remove('hidden');
         monitorView.classList.add('active');
-        console.log("✅ Forced Monitor View Active");
-    } else {
-        console.error("❌ 'view-monitor' ID not found.");
+        monitorView.classList.remove('hidden');
     }
 
-    // 2. Reset Navigation State
-    const navButtons = document.querySelectorAll('.nav-item');
-    if (navButtons.length > 0) {
-        navButtons.forEach(btn => btn.classList.remove('active'));
-        navButtons[0].classList.add('active'); 
+    // 2. Button Click Events
+    navItems.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            // e.preventDefault(); // Optional based on button type
+
+            // (1) Update Button Style
+            navItems.forEach(n => n.classList.remove('active'));
+            btn.classList.add('active');
+
+            // (2) Switch View
+            const targetId = btn.dataset.target;
+            const targetView = document.getElementById(targetId);
+
+            if (targetView) {
+                // Hide all
+                views.forEach(v => {
+                    v.classList.remove('active');
+                    // setTimeout(() => v.classList.add('hidden'), 200); // Optional fade
+                }); 
+                
+                // Show target
+                targetView.classList.add('active');
+                targetView.classList.remove('hidden');
+
+                // (3) Execute Tab Logic
+                switch (targetId) {
+                    case 'view-analysis':
+                        renderAnalysisCharts(); // Radar Chart
+                        break;
+                    case 'view-report':
+                        renderDailyReport(); // Report Chart
+                        break;
+                    case 'view-map':
+                        setTimeout(() => {
+                            if (!mapInitialized) initMap();
+                            else {
+                                map.invalidateSize();
+                                if(typeof renderHeatmap === 'function') renderHeatmap();
+                            }
+                        }, 100);
+                        break;
+                    case 'view-info':
+                        loadUserSettings(); // Load Profile
+                        break;
+                }
+            }
+        });
+    });
+    
+    // Init Chart
+    if (typeof initProbChart === 'function') initProbChart();
+    
+    // Load Custom Model
+    if (typeof loadCustomModel === 'function') loadCustomModel();
+});
+
+// --- Visualization Functions ---
+
+let radarChart = null;
+function renderAnalysisCharts() {
+    const ctx = document.getElementById('doseResponseChart'); 
+    // Note: doseResponseChart ID is used for Radar here instead of Line. 
+    // Ensure HTML canvas ID matches or update HTML. 
+    // Assuming reusing the existing canvas for Radar.
+    if (!ctx) return;
+    
+    // If existing chart is not radar, destroy it (safety)
+    const existingChart = Chart.getChart(ctx);
+    if (existingChart && existingChart.config.type !== 'radar') {
+        existingChart.destroy();
+        radarChart = null;
     }
 
-    // Init Chart immediately if possible
-    if (typeof initProbChart === 'function') {
-        initProbChart();
-        if(typeof initHarmonicaChart === 'function') initHarmonicaChart();
-    } else {
-        setTimeout(() => { 
-            if(typeof initProbChart === 'function') initProbChart();
-            if(typeof initHarmonicaChart === 'function') initHarmonicaChart(); 
-        }, 1000);
-    }
+    // Dummy Data for Radar (Replace with real `dailyStats.sourceCounts` or similar)
+    const dataValues = [
+        Math.random() * 80 + 20, // Floor
+        Math.random() * 60 + 10, // Road
+        Math.random() * 40 + 5,  // Air
+        Math.random() * 30       // Train
+    ];
 
-    // Robust Button Binding
-    const btn = document.getElementById('init-btn');
-    if(btn) {
-        btn.onclick = window.toggleMonitoring; 
-        console.log("Button event bound to toggleMonitoring");
+    if (radarChart) {
+        radarChart.data.datasets[0].data = dataValues;
+        radarChart.update();
     } else {
-        console.error("Critical: init-btn not found in DOM");
+        radarChart = new Chart(ctx, {
+            type: 'radar',
+            data: {
+                labels: ['층간소음', '도로교통', '항공기', '철도'],
+                datasets: [{
+                    label: '소음원 구성비 (%)',
+                    data: dataValues,
+                    backgroundColor: 'rgba(33, 150, 243, 0.2)',
+                    borderColor: '#2196f3',
+                    pointBackgroundColor: '#fff'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    r: {
+                        angleLines: { display: true },
+                        suggestedMin: 0,
+                        suggestedMax: 100
+                    }
+                }
+            }
+        });
     }
     
-    // Load Custom Model if available
-    loadCustomModel();
-});
+    // Also update stats text
+    updateAnalysis();
+}
+
+let reportChart = null;
+function renderDailyReport() {
+    const ctx = document.getElementById('hourlyEventsChart');
+    if (!ctx) return;
+
+    // Dummy Data 0-23h
+    const labels = Array.from({length: 24}, (_, i) => `${i}시`);
+    const dataPoints = Array.from({length: 24}, () => Math.floor(Math.random() * 60 + 30));
+
+    if (reportChart) {
+        reportChart.data.datasets[0].data = dataPoints;
+        reportChart.update();
+    } else {
+        reportChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: '시간대별 평균 소음(dB)',
+                    data: dataPoints,
+                    borderColor: '#ff9800',
+                    backgroundColor: 'rgba(255, 152, 0, 0.1)',
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true }
+                }
+            }
+        });
+    }
+}
+
+function loadUserSettings() {
+    const profile = JSON.parse(localStorage.getItem('user_profile')) || {};
+    
+    const housingSelect = document.getElementById('setting-housing-type'); // Check ID matches HTML
+    const floorSelect = document.getElementById('setting-floor-level');
+
+    if(housingSelect) housingSelect.value = profile.housingType || 'apartment';
+    if(floorSelect) floorSelect.value = profile.floorLevel || 'mid';
+}
 
 // DOM Elements
 const initBtn = document.getElementById('init-btn');

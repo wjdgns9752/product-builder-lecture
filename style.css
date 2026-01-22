@@ -762,13 +762,29 @@ footer {
 }
 
 /* --- View & Navigation Styles --- */
+/* 탭 전환 로직 (필수) */
 .view {
-    display: none;
-    animation: fadeIn 0.3s ease-out;
+    display: none !important;
+    opacity: 0;
+    transition: opacity 0.2s ease-in-out;
 }
 
 .view.active {
-    display: block;
+    display: block !important;
+    opacity: 1;
+}
+
+/* 네비게이션 버튼 스타일 */
+.nav-item {
+    opacity: 0.6;
+    transition: all 0.2s;
+    cursor: pointer;
+}
+.nav-item.active {
+    opacity: 1;
+    color: var(--primary-color, #2196f3);
+    font-weight: bold;
+    transform: translateY(-2px);
 }
 
 @keyframes fadeIn {
