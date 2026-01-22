@@ -22,49 +22,43 @@ window.toggleMonitoring = async function() {
     const btn = document.getElementById('init-btn');
     if (!btn) return;
 
-    // Prevent double-clicks
+    // 1. Lock Button (Prevent double-clicks)
     btn.disabled = true;
+    btn.style.opacity = "0.6";
+    btn.textContent = isMonitoring ? "⌛ 종료 중..." : "⌛ 초기화 중...";
 
-    if (!isMonitoring) {
-        // --- START SEQUENCE ---
-        btn.textContent = "⌛ 초기화 중...";
-        
-        try {
+    try {
+        if (!isMonitoring) {
+            // --- START SEQUENCE ---
+            // Small delay to let UI render the "Loading" state
+            await new Promise(r => setTimeout(r, 10));
+            
             const success = await startAudio();
             if (success) {
-                // Update UI to 'Stop' state
                 btn.textContent = "모니터링 중지";
                 btn.classList.add('recording-active');
             } else {
-                // Revert to 'Start' state on failure
                 btn.textContent = "모니터링 시작";
                 btn.classList.remove('recording-active');
             }
-        } catch (e) {
-            console.error("Start Error:", e);
-            alert(`❌ 실행 오류: ${e.message}`);
+        } else {
+            // --- STOP SEQUENCE ---
+            await stopAudioLogic();
             btn.textContent = "모니터링 시작";
             btn.classList.remove('recording-active');
         }
-    } else {
-        // --- STOP SEQUENCE ---
-        btn.textContent = "⌛ 중지 중...";
-        
-        try {
-            await stopAudioLogic(); // Extracted stop logic
-            // Update UI to 'Start' state
-            btn.textContent = "모니터링 시작";
-            btn.classList.remove('recording-active');
-        } catch (e) {
-            console.error("Stop Error:", e);
-            // Reset UI anyway
-            btn.textContent = "모니터링 시작";
-            btn.classList.remove('recording-active');
-        }
+    } catch (e) {
+        console.error("Toggle Error:", e);
+        alert(`오류 발생: ${e.message}`);
+        // Reset state on error
+        isMonitoring = false;
+        btn.textContent = "모니터링 시작";
+        btn.classList.remove('recording-active');
+    } finally {
+        // 3. Unlock Button (Always)
+        btn.disabled = false;
+        btn.style.opacity = "1";
     }
-
-    // Always re-enable button
-    btn.disabled = false;
 };
 
 // Extracted Stop Logic
@@ -360,27 +354,27 @@ function calculateOctaveLevels(dataArray, bufferLength, sampleRate) {
 
 // Resample audio to 16kHz and add to buffer
 function processAudioForModel(timeData, originalSampleRate) {
-    // if (!yamnetModel) return; // Allow buffer to fill even if model is loading
-
-    // Simple Decimation / Linear Interpolation
+    // Optimization: Resample directly to buffer without intermediate array
     const ratio = originalSampleRate / YAMNET_SAMPLE_RATE;
     const newLength = Math.floor(timeData.length / ratio);
     
-    for (let i = 0; i < newLength; i++) {
-        const originalIndex = i * ratio;
-        const index1 = Math.floor(originalIndex);
-        const index2 = Math.min(index1 + 1, timeData.length - 1);
-        const fraction = originalIndex - index1;
-        
-        // Linear Interpolation
-        const value = timeData[index1] * (1 - fraction) + timeData[index2] * fraction;
-        
-        yamnetAudioBuffer.push(value);
+    // Memory Guard: Prevent infinite buffer growth
+    // If buffer is too large, trim the oldest data
+    if (yamnetAudioBuffer.length > YAMNET_INPUT_SIZE * 2) {
+        yamnetAudioBuffer = yamnetAudioBuffer.slice(-YAMNET_INPUT_SIZE);
     }
-
-    // Keep buffer at reasonable size (sliding window)
-    if (yamnetAudioBuffer.length > YAMNET_INPUT_SIZE + 4000) {
-        yamnetAudioBuffer = yamnetAudioBuffer.slice(yamnetAudioBuffer.length - YAMNET_INPUT_SIZE);
+    
+    for (let i = 0; i < newLength; i++) {
+        const originalIndex = Math.floor(i * ratio);
+        
+        // Bounds check
+        if (originalIndex < timeData.length) {
+            // Simple Nearest Neighbor (Faster than Linear for this purpose)
+            // or Linear Interpolation if quality is critical. 
+            // Using existing logic (Nearest/Linear hybrid in loop) 
+            // Simplified for performance:
+            yamnetAudioBuffer.push(timeData[originalIndex]);
+        }
     }
     
     // Update Step 2 Debug Info if Waiting
@@ -1399,125 +1393,120 @@ function renderAdminLogs() {
 //   await startAudio();
 // });
 
+// --- 최적화된 설정 변수 (Performance Tuning) ---
+const VISUAL_FPS = 60;          
+const ANALYSIS_INTERVAL = 1000; // AI/Stats runs once per second
+let lastAnalysisTick = 0;
+
 // --- Analysis Loop ---
 function analyze() {
-  requestAnimationFrame(analyze);
-  if (!isMonitoring || isPausedForEval) return;
+    requestAnimationFrame(analyze);
+    
+    // 모니터링 중이 아니거나 평가 중이면 중단
+    if (!isMonitoring || isPausedForEval) return;
 
-  const bufferLength = analyser.frequencyBinCount;
-  
-  // 1. Frequency Data for Visualizer & dB
-  const dataArray = new Uint8Array(bufferLength);
-  analyser.getByteFrequencyData(dataArray);
+    // 1. [High Speed] Visualization Data (Minimal Calc)
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+    analyser.getByteFrequencyData(dataArray);
 
-  // --- Calculate Spectral Centroid ---
-  let sumFreq = 0;
-  let sumAmp = 0;
-  for (let i = 0; i < bufferLength; i++) {
-      sumFreq += i * dataArray[i];
-      sumAmp += dataArray[i];
-  }
-  currentCentroid = sumAmp > 0 ? sumFreq / sumAmp : 0;
+    // dB Calculation (RMS)
+    let sum = 0;
+    for(let i = 0; i < bufferLength; i++) {
+        const x = dataArray[i] / 255; 
+        sum += x * x;
+    }
+    const rms = Math.sqrt(sum / bufferLength);
+    let rawDb = 20 * Math.log10(rms + 0.00001); 
+    
+    // Calibration
+    let calibratedDb = rawDb + dbOffset;
+    if (calibratedDb < 0) calibratedDb = 0;
+    currentVolumeValue = calibratedDb;
 
+    // --- Calculate Spectral Centroid (Needed for simple pitch UI) ---
+    // (Keeping lightweight physics calculation here for UI responsiveness)
+    let sumFreq = 0;
+    let sumAmp = 0;
+    for (let i = 0; i < bufferLength; i++) {
+        sumFreq += i * dataArray[i];
+        sumAmp += dataArray[i];
+    }
+    currentCentroid = sumAmp > 0 ? sumFreq / sumAmp : 0;
 
-  // 2. Time Domain Data for AI Model
-  const timeData = new Float32Array(bufferLength);
-  analyser.getFloatTimeDomainData(timeData);
-  // Feed to YAMNet Buffer (resampled to 16kHz)
-  processAudioForModel(timeData, audioContext.sampleRate);
+    // --- Calculate Impulse (Needed for immediate UI feedback) ---
+    let delta = calibratedDb - lastDbValue;
+    if (delta > 3) { 
+        currentImpulse += delta * 2; 
+    } else {
+        currentImpulse *= 0.9; 
+    }
+    if (currentImpulse > 100) currentImpulse = 100;
+    lastDbValue = calibratedDb;
 
-  // 3. dB Calculation
-  let sum = 0;
-  for(let i = 0; i < bufferLength; i++) {
-    const x = dataArray[i] / 255; 
-    sum += x * x;
-  }
-  const rms = Math.sqrt(sum / bufferLength);
-  
-  // Visualize Step 1 (Fingerprint) Activity
-  const step1Card = document.querySelector('.step-card'); // First one is Step 1
-  if (step1Card) {
-      const intensity = Math.min(1, rms * 5);
-      step1Card.style.borderColor = `rgba(33, 150, 243, ${0.3 + intensity})`;
-      step1Card.style.boxShadow = `0 0 ${intensity * 10}px rgba(33, 150, 243, ${0.5})`;
-  }
+    // 2. [High Speed] UI Updates (Gauge, Status)
+    updateUI(calibratedDb, backgroundLevel);
+    checkThreshold(calibratedDb, backgroundLevel);
+    
+    // Spectrogram is drawn in its own loop (drawSpectrogram), so we don't need to call it here.
+    // But we need to update Visualizer Step 1 effect
+    const step1Card = document.querySelector('.step-card');
+    if (step1Card) {
+        const intensity = Math.min(1, rms * 5);
+        step1Card.style.borderColor = `rgba(33, 150, 243, ${0.3 + intensity})`;
+        step1Card.style.boxShadow = `0 0 ${intensity * 10}px rgba(33, 150, 243, ${0.5})`;
+    }
 
-  let rawDb = 20 * Math.log10(rms + 0.00001); 
-  let calibratedDb = rawDb + dbOffset;
-  if (calibratedDb < 0) calibratedDb = 0;
-  currentVolumeValue = calibratedDb;
+    if (!calibModal.classList.contains('hidden')) {
+        currentRawDbSpan.textContent = rawDb.toFixed(1);
+    }
 
-  // --- Calculate Impulse ---
-  let delta = calibratedDb - lastDbValue;
-  if (delta > 3) { // Rapid rise
-      currentImpulse += delta * 2; 
-  } else {
-      currentImpulse *= 0.9; // Decay
-  }
-  if (currentImpulse > 100) currentImpulse = 100;
-  lastDbValue = calibratedDb;
+    // Background Tracker (Fast adaption)
+    if (calibratedDb < backgroundLevel) {
+        backgroundLevel = Math.max(10, backgroundLevel * (1 - decayRate) + calibratedDb * decayRate);
+    } else backgroundLevel = backgroundLevel * (1 - adaptationRate) + calibratedDb * adaptationRate;
+    
+    // Push to Buffer (needed for stats)
+    dbBuffer.push(calibratedDb);
+    if (dbBuffer.length > BUFFER_SIZE) dbBuffer.shift();
 
-  
-  if (!calibModal.classList.contains('hidden')) {
-      currentRawDbSpan.textContent = rawDb.toFixed(1);
-  }
+    // Show content if data exists
+    const ph = document.getElementById('analysis-placeholder');
+    const ct = document.getElementById('analysis-content');
+    if (ph && ct && dbBuffer.length > 0) {
+        ph.style.display = 'none';
+        ct.style.display = 'block';
+    }
 
-  // 4. Run Classifier (Model) & Update Dose-Response
-  if (calibratedDb > 10 && !isCalibrating) { 
-      analyzeNoiseCharacteristics().then(result => {
-          // Update UI regardless of 'none' label to ensure status reflects current state
-          updateInternalClassifierUI(result);
-          if(result.label !== 'none') {
-              updateDoseVisuals(calibratedDb, result.label); 
-          }
-      }).catch(err => console.error("AI Analysis Loop Error:", err));
-  } else {
-      updateInternalClassifierUI({ label: 'none', score: 0 });
-      // Update Step 2 explicitly for Quiet state
-      const step2 = document.getElementById('ai-step-recognition');
-      if (step2) {
-          step2.innerHTML = `조용함 (AI 분석 대기)<br><span style='font-size:0.65rem; color:#999'>입력 신호가 약합니다 (${calibratedDb.toFixed(1)}dB)</span>`;
-          step2.style.color = "#999";
-      }
-      // Update Chart for Quiet
-      if (aiProbChart) {
-          aiProbChart.data.labels = ['조용함', '-', '-', '-', '-'];
-          aiProbChart.data.datasets[0].data = [100, 0, 0, 0, 0];
-          aiProbChart.data.datasets[0].backgroundColor = ['#9e9e9e', '#e0e0e0', '#e0e0e0', '#e0e0e0', '#e0e0e0'];
-          aiProbChart.update();
-      }
-  }
+    // ---------------------------------------------------------
+    // 3. [Low Speed] Heavy Analysis (AI, Stats, Map) - 1Hz
+    // ---------------------------------------------------------
+    const now = Date.now();
+    if (now - lastAnalysisTick > ANALYSIS_INTERVAL) {
+        lastAnalysisTick = now;
 
-  // 5. Update Visualizer Data (Octave Bands)
-  currentOctaveLevels = calculateOctaveLevels(dataArray, bufferLength, audioContext.sampleRate);
+        // (1) Extract Time Data for AI
+        const timeData = new Float32Array(bufferLength);
+        analyser.getFloatTimeDomainData(timeData);
+        processAudioForModel(timeData, audioContext.sampleRate);
 
-  // Background
-  if (calibratedDb < backgroundLevel) {
-      backgroundLevel = Math.max(10, backgroundLevel * (1 - decayRate) + calibratedDb * decayRate);
-  } else backgroundLevel = backgroundLevel * (1 - adaptationRate) + calibratedDb * adaptationRate;
-  
-  // Push to Buffer for Advanced Analysis
-  dbBuffer.push(calibratedDb);
-  if (dbBuffer.length > BUFFER_SIZE) dbBuffer.shift();
+        // (2) Run AI Model (Async)
+        if (!isModelProcessing && calibratedDb > 40) { // Skip if too quiet
+            analyzeNoiseCharacteristics()
+                .then(result => {
+                    updateInternalClassifierUI(result);
+                    if(result.label !== 'none') updateDoseVisuals(calibratedDb, result.label);
+                })
+                .catch(err => console.error("AI Error:", err));
+        } else if (calibratedDb <= 40) {
+             // Explicitly update UI for quiet state periodically
+             updateInternalClassifierUI({ label: 'none', score: 0 });
+        }
 
-  // Show content if data exists
-  const ph = document.getElementById('analysis-placeholder');
-  const ct = document.getElementById('analysis-content');
-  if (ph && ct && dbBuffer.length > 0) {
-      ph.style.display = 'none';
-      ct.style.display = 'block';
-  }
-
-  // Run Advanced Analysis & Auto Map every 500ms
-  const now = Date.now();
-  if (now - lastAnalysisTime > 500) {
-      updateAnalysis();
-      autoRecordToMap(); // Enable automatic mapping
-      lastAnalysisTime = now;
-  }
-
-  updateUI(calibratedDb, backgroundLevel);
-  checkThreshold(calibratedDb, backgroundLevel);
+        // (3) Heavy Stats & Map
+        updateAnalysis(); // Stats
+        autoRecordToMap(); // Map
+    }
 }
 
 // --- Advanced Analysis Function ---
