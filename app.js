@@ -1916,78 +1916,195 @@ function stopPinkNoise() {
     isPlayingNoise = false; playNoiseBtn.textContent = "🔊 핑크 노이즈 재생";
 }
 
-// --- Navigation & View Logic ---
-const navItems = document.querySelectorAll('.nav-item');
-const views = document.querySelectorAll('.view');
-let mapInitialized = false;
-let map = null;
-let currentMapMarker = null;
+// --- Enhanced Tab Switching & Rendering Logic ---
 
+// 1. Navigation Event Handler
 navItems.forEach(nav => {
     nav.addEventListener('click', () => {
-        // Switch Active Nav
+        // UI Toggle
         navItems.forEach(n => n.classList.remove('active'));
         nav.classList.add('active');
-
-        // Switch View
+        
         const targetId = nav.dataset.target;
         views.forEach(v => {
-            if(v.id === targetId) v.classList.add('active');
-            else v.classList.remove('active');
+            v.classList.toggle('active', v.id === targetId);
+            v.classList.toggle('hidden', v.id !== targetId);
         });
 
-        // Special Init for Map
-        if (targetId === 'view-map') {
-            if (!mapInitialized) {
-                initMap();
-            } else if (map) {
-                setTimeout(() => {
+        // Specific Tab Rendering
+        if (targetId === 'view-analysis') {
+            renderAnalysisTab();
+        } else if (targetId === 'view-report') {
+            renderReportTab();
+        } else if (targetId === 'view-map') {
+            setTimeout(() => {
+                if (!mapInitialized) initMap();
+                else {
                     map.invalidateSize();
                     updateUserLocation();
-                }, 100);
-            }
-        }
-        
-        // Special Init for Analysis
-        if (targetId === 'view-analysis') {
-            // 1. Ensure Charts Exist (Lazy Init)
-            if (!doseChart) initDoseChart();
-            if (!harmonicaChart) initHarmonicaChart();
-            
-            // 2. Force Resize (Critical for Chart.js in Tabs)
-            setTimeout(() => {
-                if (doseChart) { doseChart.resize(); }
-                if (harmonicaChart) { harmonicaChart.resize(); }
-                
-                // 3. Populate & Update Charts from Buffer
-                if (harmonicaChart && dbBuffer.length > 0) {
-                    // Regenerate chart data from buffer trends (simulated for demo)
-                    // In a real app, we would have history. Here we just ensure it's not empty.
-                    const dHarmonica = harmonicaChart.data.datasets[0].data;
-                    const dIntrusive = harmonicaChart.data.datasets[1].data;
-                    const dIR = harmonicaChart.data.datasets[2].data;
-                    
-                    // Fill if empty
-                    if (dHarmonica[0] === null || dHarmonica[0] === undefined) {
-                         for(let i=0; i<30; i++) {
-                            dHarmonica[i] = 50 + Math.random() * 20;
-                            dIntrusive[i] = 10 + Math.random() * 10;
-                            dIR[i] = 5 + Math.random() * 5;
-                        }
-                    }
-                    harmonicaChart.update();
                 }
-                
-                updateAnalysis(); // Updates text stats
-                
-                if (currentVolumeValue > 0 || dbBuffer.length > 0) {
-                    // Update Dose Bubble
-                    updateDoseVisuals(currentVolumeValue || 60, 'Road Traffic');
-                }
-            }, 50);
+                renderHeatmap(); // Heatmap Rendering
+            }, 200);
+        } else if (targetId === 'view-info') {
+            renderSettingsTab();
         }
     });
 });
+
+// 2. Tab Rendering Functions
+
+function renderAnalysisTab() {
+    // 1. Ensure Charts Exist (Lazy Init)
+    if (!doseChart) initDoseChart();
+    if (!harmonicaChart) initHarmonicaChart();
+
+    // Resize Charts
+    setTimeout(() => {
+        if (doseChart) { doseChart.resize(); }
+        if (harmonicaChart) { harmonicaChart.resize(); }
+        
+        // 3. Populate & Update Charts from Buffer
+        if (harmonicaChart && dbBuffer.length > 0) {
+            // Regenerate chart data from buffer trends (simulated for demo)
+            const dHarmonica = harmonicaChart.data.datasets[0].data;
+            const dIntrusive = harmonicaChart.data.datasets[1].data;
+            const dIR = harmonicaChart.data.datasets[2].data;
+            
+            // Fill if empty
+            if (dHarmonica[0] === null || dHarmonica[0] === undefined) {
+                    for(let i=0; i<30; i++) {
+                    dHarmonica[i] = 50 + Math.random() * 20;
+                    dIntrusive[i] = 10 + Math.random() * 10;
+                    dIR[i] = 5 + Math.random() * 5;
+                }
+            }
+            harmonicaChart.update();
+        }
+    }, 50);
+
+    // Integrated Annoyance Simulation
+    const currentSrc = latestPredictionText ? latestPredictionText.split('(')[0].trim() : '배경 소음'; 
+    let airDb = 0, roadDb = 0, floorDb = 0;
+    const currentDb = currentVolumeValue;
+    const bgDb = backgroundLevel || 40;
+
+    // Simulate based on current source
+    if (currentSrc.includes('항공') || currentSrc.includes('Air')) airDb = currentDb;
+    else if (currentSrc.includes('층간') || currentSrc.includes('Floor')) floorDb = currentDb;
+    else roadDb = Math.max(bgDb, currentDb); 
+
+    const totalHA = calcTotalAnnoyance(airDb, roadDb, floorDb);
+    
+    // UI Update
+    const haElem = document.getElementById('ha-percent');
+    if(haElem) {
+        haElem.textContent = totalHA.toFixed(1);
+        haElem.style.color = totalHA > 20 ? '#f44336' : '#4caf50';
+    }
+    
+    if (currentVolumeValue > 0 || dbBuffer.length > 0) {
+        // Update Dose Bubble
+        updateDoseVisuals(currentVolumeValue || 60, 'Road Traffic');
+    }
+    
+    // Force Stats Update
+    updateAnalysis();
+}
+
+function renderReportTab() {
+    renderReport(); 
+
+    // CSV Export Binding
+    const exportBtn = document.getElementById('btn-export-csv');
+    if (exportBtn) {
+        exportBtn.onclick = downloadCSV;
+    }
+}
+
+function downloadCSV() {
+    if (!dailyStats || !dailyStats.events || dailyStats.events.length === 0) {
+        alert("저장된 데이터가 없습니다.");
+        return;
+    }
+
+    let csvContent = "data:text/csv;charset=utf-8,";
+    csvContent += "Time,Event Type,Max dB,Harmonica Index\n";
+
+    dailyStats.events.forEach(e => {
+        csvContent += `${e.time},${e.label},${e.maxDb.toFixed(1)},${e.hi.toFixed(1)}\n`;
+    });
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `noise_report_${new Date().toLocaleDateString()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+}
+
+function renderHeatmap() {
+    if (!map || typeof L.heatLayer === 'undefined') return;
+
+    // Remove existing heat layer
+    if (window.noiseHeatLayer) {
+        map.removeLayer(window.noiseHeatLayer);
+    }
+
+    // Generate Heatmap Data
+    // Use noiseHistory. If empty (initial load), use demo points if available or wait
+    const dataPoints = noiseHistory.length > 0 ? noiseHistory : [];
+    
+    const heatData = dataPoints.map(h => {
+        // Normalize intensity: 40dB -> 0.0, 90dB -> 1.0
+        const intensity = Math.max(0, Math.min(1, (h.db - 40) / 50)); 
+        return [h.lat, h.lng, intensity];
+    });
+
+    if (heatData.length > 0) {
+        window.noiseHeatLayer = L.heatLayer(heatData, {
+            radius: 25,
+            blur: 15,
+            maxZoom: 17,
+            gradient: {0.4: 'blue', 0.65: 'lime', 1: 'red'}
+        }).addTo(map);
+    }
+}
+
+function renderSettingsTab() {
+    // Sync Settings UI
+    if (thresholdVal && thresholdSlider) {
+        thresholdVal.textContent = thresholdSlider.value;
+    }
+
+    const profile = JSON.parse(localStorage.getItem('user_profile')) || {};
+    
+    const housingSelect = document.getElementById('setting-housing-type');
+    const floorSelect = document.getElementById('setting-floor-level');
+
+    if(housingSelect) housingSelect.value = profile.housingType || 'apartment';
+    if(floorSelect) floorSelect.value = profile.floorLevel || 'mid';
+
+    // Save Button
+    const saveBtn = document.getElementById('btn-save-settings');
+    if(saveBtn) {
+        saveBtn.onclick = () => {
+            const newProfile = {
+                ...profile,
+                housingType: housingSelect ? housingSelect.value : 'apartment',
+                floorLevel: floorSelect ? floorSelect.value : 'mid',
+                updatedAt: Date.now()
+            };
+            localStorage.setItem('user_profile', JSON.stringify(newProfile));
+            
+            // Sync to Firestore if user exists
+            if (currentUserId && typeof db !== 'undefined') {
+                db.collection("users").doc(currentUserId).set(newProfile, { merge: true });
+            }
+            
+            alert("설정이 저장되었습니다.");
+        };
+    }
+}
 
 // --- Dose-Response Analysis (Chart.js) ---
 let doseChart = null;

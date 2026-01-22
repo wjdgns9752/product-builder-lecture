@@ -20,6 +20,8 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Leaflet Heatmap -->
+    <script src="https://leaflet.github.io/Leaflet.heat/dist/leaflet-heat.js"></script>
 
     <link rel="stylesheet" href="style.css?v=20">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔊</text></svg>">
@@ -339,6 +341,26 @@
                         알림음 켜기
                     </label>
                     <button id="theme-toggle" class="theme-btn" style="margin-top:15px; width:100%;">테마 변경</button>
+                    
+                    <hr style="margin: 20px 0; border: 0; border-top: 1px solid #eee;">
+                    
+                    <h3>👤 사용자 환경 설정</h3>
+                    <label style="font-size:0.8rem; color:#666;">주거 형태</label>
+                    <select id="setting-housing-type" class="full-select" style="margin-bottom:10px;">
+                        <option value="apartment">아파트</option>
+                        <option value="officetel">오피스텔</option>
+                        <option value="villa">빌라</option>
+                        <option value="house">주택</option>
+                    </select>
+                    
+                    <label style="font-size:0.8rem; color:#666;">거주 층수</label>
+                    <select id="setting-floor-level" class="full-select" style="margin-bottom:15px;">
+                        <option value="low">저층 (1-3층)</option>
+                        <option value="mid">중층 (4-10층)</option>
+                        <option value="high">고층 (11층 이상)</option>
+                    </select>
+                    
+                    <button id="btn-save-settings" class="primary-btn" style="width:100%;">설정 저장</button>
                 </div>
 
                 <div class="content-block" style="margin-top: 30px;">
@@ -444,6 +466,7 @@
                             </tbody>
                         </table>
                     </div>
+                    <button id="btn-export-csv" class="secondary-btn" style="width:100%; margin-top:10px;">💾 데이터 내보내기 (CSV)</button>
                 </div>
             </section>
         </div>
