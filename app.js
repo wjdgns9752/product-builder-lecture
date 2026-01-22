@@ -534,7 +534,7 @@ async function analyzeNoiseCharacteristics() {
     window.lastModelStartTime = Date.now();
     
     // UI Feedback: Start Processing (Removed to prevent flickering)
-    // const recEl = document.getElementById('ai-step-recognition');
+    const recEl = document.getElementById('ai-step-recognition');
     // if (recEl) recEl.textContent = "⚡ AI 분석 중...";
 
     try {
@@ -1487,6 +1487,8 @@ function updateAnalysis() {
 
     // 6. Event Detection & Logging
     const now = Date.now();
+    let detectedEventLabel = 'none';
+
     if ((currentImpulse > 30 || Leq > 70) && (now - lastEventTime > EVENT_COOLDOWN_MS)) {
         lastEventTime = now;
         
@@ -1500,6 +1502,8 @@ function updateAnalysis() {
             else if (currentCentroid > 200) eventType = "고주파 소음";
             else eventType = "지속 소음";
         }
+        
+        detectedEventLabel = eventType; // Set for stats
 
         const logList = document.getElementById('noise-event-list');
         if (logList) {
@@ -1516,6 +1520,11 @@ function updateAnalysis() {
             const emptyMsg = logList.querySelector('li[style*="text-align:center"]');
             if (emptyMsg) emptyMsg.remove();
         }
+    }
+
+    // 7. Update 24H Report Stats
+    if (typeof updateDailyStats === 'function') {
+        updateDailyStats(Leq, { harmonica: Harmonica, ir: IR, intrusive: Intrusiveness }, detectedEventLabel);
     }
 
     // Update Analysis Comment
@@ -2077,3 +2086,232 @@ function loadMapData() {
         });
     }
 }
+
+// --- 24H Report Logic ---
+
+let dailyStats = loadDailyStats() || resetDailyStats();
+let reportCharts = {};
+
+function resetDailyStats() {
+    return {
+        date: new Date().toLocaleDateString(),
+        hourly: Array(24).fill(null).map(() => ({ count: 0, maxDb: 0, sumDb: 0, n: 0 })),
+        dayEvents: 0,
+        nightEvents: 0,
+        daySumDb: 0, dayCount: 0,
+        nightSumDb: 0, nightCount: 0,
+        sourceCounts: {},
+        events: [], // List of significant events with details
+        metrics: {
+            harmonica: [], // Hourly avg
+            ir: [],
+            intrusive: []
+        }
+    };
+}
+
+function loadDailyStats() {
+    const data = localStorage.getItem('dailyStats');
+    if (data) {
+        const stats = JSON.parse(data);
+        if (stats.date !== new Date().toLocaleDateString()) return resetDailyStats();
+        return stats;
+    }
+    return null;
+}
+
+function saveDailyStats() {
+    localStorage.setItem('dailyStats', JSON.stringify(dailyStats));
+}
+
+function updateDailyStats(db, metrics, eventLabel) {
+    const now = new Date();
+    const hour = now.getHours();
+    const isNight = (hour >= 22 || hour < 6);
+
+    // 1. Hourly Aggregation
+    dailyStats.hourly[hour].n++;
+    dailyStats.hourly[hour].sumDb += db;
+    if (db > dailyStats.hourly[hour].maxDb) dailyStats.hourly[hour].maxDb = db;
+
+    // 2. Day/Night Aggregation
+    if (isNight) {
+        dailyStats.nightSumDb += db;
+        dailyStats.nightCount++;
+    } else {
+        dailyStats.daySumDb += db;
+        dailyStats.dayCount++;
+    }
+
+    // 3. Event Tracking
+    if (eventLabel && eventLabel !== 'none') {
+        dailyStats.hourly[hour].count++;
+        if (isNight) dailyStats.nightEvents++; else dailyStats.dayEvents++;
+        
+        dailyStats.sourceCounts[eventLabel] = (dailyStats.sourceCounts[eventLabel] || 0) + 1;
+
+        // Log significant event
+        dailyStats.events.unshift({
+            time: now.toLocaleTimeString(),
+            label: eventLabel,
+            maxDb: db,
+            hi: metrics.harmonica
+        });
+        
+        if (dailyStats.events.length > 50) dailyStats.events.pop();
+    }
+
+    // 4. Metrics Tracking (Simple hourly average for graph)
+    // Initialize array if needed
+    if (!dailyStats.metrics.harmonica[hour]) dailyStats.metrics.harmonica[hour] = [];
+    dailyStats.metrics.harmonica[hour].push(metrics.harmonica);
+    
+    saveDailyStats();
+}
+
+function initReportCharts() {
+    // Hourly Events Chart
+    const ctxHourly = document.getElementById('hourlyEventsChart');
+    if (ctxHourly) {
+        reportCharts.hourly = new Chart(ctxHourly, {
+            type: 'line',
+            data: {
+                labels: Array.from({length: 24}, (_, i) => `${i}시`),
+                datasets: [{
+                    label: '소음 이벤트 수',
+                    data: Array(24).fill(0),
+                    borderColor: '#2196f3',
+                    backgroundColor: 'rgba(33, 150, 243, 0.1)',
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: { y: { beginAtZero: true } }
+            }
+        });
+    }
+
+    // Day/Night Chart
+    const ctxDN = document.getElementById('dayNightChart');
+    if (ctxDN) {
+        reportCharts.dn = new Chart(ctxDN, {
+            type: 'doughnut',
+            data: {
+                labels: ['주간 (06-22)', '야간 (22-06)'],
+                datasets: [{
+                    data: [0, 0],
+                    backgroundColor: ['#ff9800', '#3f51b5']
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+    }
+
+    // Source Distribution Chart
+    const ctxSource = document.getElementById('sourceDistChart');
+    if (ctxSource) {
+        reportCharts.source = new Chart(ctxSource, {
+            type: 'doughnut',
+            data: {
+                labels: [],
+                datasets: [{
+                    data: [],
+                    backgroundColor: ['#e91e63', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3']
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+    }
+
+    // Metrics Trend Chart
+    const ctxMetrics = document.getElementById('dailyMetricsChart');
+    if (ctxMetrics) {
+        reportCharts.metrics = new Chart(ctxMetrics, {
+            type: 'bar',
+            data: {
+                labels: Array.from({length: 24}, (_, i) => `${i}시`),
+                datasets: [
+                    { label: 'Harmonica (평균)', data: [], backgroundColor: '#4caf50' },
+                    { label: '최대 dB', data: [], type: 'line', borderColor: '#f44336', borderDash: [5, 5] }
+                ]
+            },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+    }
+}
+
+function renderReport() {
+    // 1. Stats
+    const dayAvg = dailyStats.dayCount > 0 ? (dailyStats.daySumDb / dailyStats.dayCount).toFixed(1) : '-';
+    const nightAvg = dailyStats.nightCount > 0 ? (dailyStats.nightSumDb / dailyStats.nightCount).toFixed(1) : '-';
+    
+    document.getElementById('report-total-events').textContent = dailyStats.dayEvents + dailyStats.nightEvents;
+    document.getElementById('report-day-avg').textContent = dayAvg;
+    document.getElementById('report-night-avg').textContent = nightAvg;
+
+    // 2. Charts
+    if (!reportCharts.hourly) initReportCharts();
+
+    // Hourly
+    if (reportCharts.hourly) {
+        reportCharts.hourly.data.datasets[0].data = dailyStats.hourly.map(h => h.count);
+        reportCharts.hourly.update();
+    }
+
+    // Day/Night
+    if (reportCharts.dn) {
+        reportCharts.dn.data.datasets[0].data = [dailyStats.dayEvents, dailyStats.nightEvents];
+        reportCharts.dn.update();
+    }
+
+    // Source
+    if (reportCharts.source) {
+        const sources = Object.keys(dailyStats.sourceCounts);
+        const sourceData = Object.values(dailyStats.sourceCounts);
+        reportCharts.source.data.labels = sources;
+        reportCharts.source.data.datasets[0].data = sourceData;
+        reportCharts.source.update();
+    }
+
+    // Metrics
+    if (reportCharts.metrics) {
+        const avgHI = dailyStats.metrics.harmonica.map(arr => {
+            if (!arr || arr.length === 0) return 0;
+            return arr.reduce((a, b) => a + b, 0) / arr.length;
+        });
+        const maxDBs = dailyStats.hourly.map(h => h.maxDb);
+        
+        reportCharts.metrics.data.datasets[0].data = avgHI;
+        reportCharts.metrics.data.datasets[1].data = maxDBs;
+        reportCharts.metrics.update();
+    }
+
+    // 3. Log Table
+    const tbody = document.getElementById('daily-log-table-body');
+    if (tbody) {
+        if (dailyStats.events.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px; color:#999;">데이터가 없습니다.</td></tr>';
+        } else {
+            tbody.innerHTML = dailyStats.events.map(e => `
+                <tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 8px;">${e.time}</td>
+                    <td style="padding: 8px;">${e.label}</td>
+                    <td style="padding: 8px; font-weight:bold;">${e.maxDb.toFixed(1)}</td>
+                    <td style="padding: 8px;">${e.hi.toFixed(0)}</td>
+                </tr>
+            `).join('');
+        }
+    }
+}
+
+// Hook into existing view switch logic
+navItems.forEach(nav => {
+    nav.addEventListener('click', () => {
+        if (nav.dataset.target === 'view-report') {
+            renderReport();
+        }
+    });
+});

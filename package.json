@@ -4,5 +4,8 @@
   },
   "devDependencies": {
     "wrangler": "^4.58.0"
+  },
+  "dependencies": {
+    "@tensorflow/tfjs": "^4.22.0"
   }
 }

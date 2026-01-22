@@ -368,6 +368,76 @@
             </section>
         </div>
 
+        <!-- === VIEW 5: REPORT (24H Analysis) === -->
+        <div id="view-report" class="view hidden">
+            <section class="tool-section">
+                <h2>📅 24시간 종합 리포트</h2>
+                <p class="subtitle">하루 동안의 소음 패턴 분석</p>
+
+                <!-- Summary Stats -->
+                <div class="metrics-grid" style="margin-top:15px;">
+                    <div class="metric-box">
+                        <span class="m-label">총 이벤트</span>
+                        <span class="m-value" id="report-total-events">0</span>
+                        <div class="m-desc">감지된 소음 건수</div>
+                    </div>
+                    <div class="metric-box">
+                        <span class="m-label">주간 평균</span>
+                        <span class="m-value" id="report-day-avg">0.0</span>
+                        <div class="m-desc">06:00 ~ 22:00</div>
+                    </div>
+                    <div class="metric-box">
+                        <span class="m-label">야간 평균</span>
+                        <span class="m-value" id="report-night-avg">0.0</span>
+                        <div class="m-desc">22:00 ~ 06:00</div>
+                    </div>
+                </div>
+
+                <!-- Charts -->
+                <div class="chart-container" style="margin-top: 20px; height: 250px;">
+                    <h3>🕒 시간대별 소음 발생 빈도</h3>
+                    <canvas id="hourlyEventsChart"></canvas>
+                </div>
+
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <div class="chart-container" style="flex: 1; height: 200px;">
+                        <h3 style="font-size: 0.9rem;">☀️/🌙 주야간 비율</h3>
+                        <canvas id="dayNightChart"></canvas>
+                    </div>
+                    <div class="chart-container" style="flex: 1; height: 200px;">
+                        <h3 style="font-size: 0.9rem;">🔊 소음원 분포</h3>
+                        <canvas id="sourceDistChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- 24H Metrics Trend -->
+                <div class="chart-container" style="margin-top: 20px; height: 250px;">
+                    <h3>📈 24H 지표 변화 (Harmonica/IR)</h3>
+                    <canvas id="dailyMetricsChart"></canvas>
+                </div>
+
+                <!-- Event Log Table -->
+                <div class="event-log-container" style="margin-top: 20px;">
+                    <h3>📋 24시간 주요 이벤트 로그</h3>
+                    <div style="max-height: 200px; overflow-y: auto;">
+                        <table style="width: 100%; font-size: 0.8rem; border-collapse: collapse;">
+                            <thead>
+                                <tr style="background: #f5f5f5; border-bottom: 2px solid #ddd;">
+                                    <th style="padding: 8px; text-align: left;">시간</th>
+                                    <th style="padding: 8px; text-align: left;">유형</th>
+                                    <th style="padding: 8px; text-align: right;">최대 dB</th>
+                                    <th style="padding: 8px; text-align: center;">HI</th>
+                                </tr>
+                            </thead>
+                            <tbody id="daily-log-table-body">
+                                <tr><td colspan="4" style="text-align:center; padding:20px; color:#999;">데이터가 없습니다.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        </div>
+
     </main>
 
     <!-- Navigation Bar -->
@@ -379,6 +449,10 @@
         <button class="nav-item" data-target="view-analysis">
             <span class="icon">📈</span>
             <span>분석</span>
+        </button>
+        <button class="nav-item" data-target="view-report">
+            <span class="icon">📅</span>
+            <span>리포트</span>
         </button>
         <button class="nav-item" data-target="view-map">
             <span class="icon">🗺️</span>
