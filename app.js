@@ -87,8 +87,25 @@ window.stopMonitoring = window.toggleMonitoring;
 
 // Auto-bind on load (Safety net)
 document.addEventListener('DOMContentLoaded', () => {
-    console.log("App Version: 20260121_FINAL_V5 (Button Fix)");
+    console.log("App Version: 20260121_FINAL_V6 (Emergency Fix & Research Update)");
     
+    // 1. Force Monitor View Active
+    const monitorView = document.getElementById('view-monitor');
+    if (monitorView) {
+        monitorView.classList.remove('hidden');
+        monitorView.classList.add('active');
+        console.log("✅ Forced Monitor View Active");
+    } else {
+        console.error("❌ 'view-monitor' ID not found.");
+    }
+
+    // 2. Reset Navigation State
+    const navButtons = document.querySelectorAll('.nav-item');
+    if (navButtons.length > 0) {
+        navButtons.forEach(btn => btn.classList.remove('active'));
+        navButtons[0].classList.add('active'); 
+    }
+
     // Init Chart immediately if possible
     if (typeof initProbChart === 'function') {
         initProbChart();
@@ -108,6 +125,9 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
         console.error("Critical: init-btn not found in DOM");
     }
+    
+    // Load Custom Model if available
+    loadCustomModel();
 });
 
 // DOM Elements
@@ -499,14 +519,55 @@ async function setupAI(stream) {
 // (Removed old DOMContentLoaded listener for calibration to avoid conflicts)
 
 // YAMNet Class Mapping (Label keywords to App Categories)
-// Enhanced Category Mapping
+// Enhanced Category Mapping (Research-Oriented)
 const CLASS_MAPPING = {
-    'floor': ['knock', 'thump', 'thud', 'footsteps', 'walk', 'run', 'impact', 'door', 'slam', 'tap', 'clatter', 'shuffle', 'drop', 'fall', 'drag', 'jump', 'hop', 'skip', 'stomp'],
-    'home': ['speech', 'conversation', 'talk', 'laugh', 'cry', 'shout', 'yell', 'scream', 'baby', 'child', 'cough', 'sneeze', 'domestic', 'vacuum', 'blender', 'water', 'dish', 'cook', 'fry', 'chop', 'music', 'tv', 'television', 'radio', 'instrument', 'piano', 'guitar', 'phone', 'ring', 'alarm', 'clock', 'dog', 'bark', 'cat', 'meow', 'pet'],
-    'road': ['vehicle', 'traffic', 'car', 'bus', 'truck', 'motor', 'engine', 'horn', 'siren', 'tire', 'skid', 'brake', 'accelerat', 'revving', 'idling', 'street', 'roadway'],
-    'train': ['train', 'rail', 'subway', 'metro', 'underground', 'station', 'locomotive', 'steam', 'whistle'],
-    'air': ['aircraft', 'airplane', 'plane', 'helicopter', 'jet', 'propeller', 'aviation', 'fly', 'flight']
+    // 1. Floor Impact (Core Research Target)
+    'floor': [
+        'knock', 'thump', 'thud', 'tap', 'clatter', 'shuffle', 
+        'footsteps', 'walk', 'run', 'jump', 'stomp',           
+        'drag', 'drop', 'fall', 'slam', 'door'                 
+    ],
+    
+    // 2. Aircraft (Gwangju Airbase)
+    'air': [
+        'aircraft', 'airplane', 'plane', 'jet', 'propeller',   
+        'helicopter', 'aviation', 'flight', 'fixed-wing'       
+    ],
+
+    // 3. Road Traffic (Background)
+    'road': [
+        'vehicle', 'traffic', 'car', 'bus', 'truck', 'motor',  
+        'engine', 'idling', 'accelerat', 'revving',            
+        'horn', 'siren', 'brake', 'tire', 'skid'               
+    ],
+
+    // 4. Railway (Songjeong Station)
+    'train': [
+        'train', 'rail', 'subway', 'metro', 'station',         
+        'steam', 'locomotive', 'whistle'                       
+    ],
+
+    // 5. Household (Reference)
+    'home': [
+        'speech', 'conversation', 'talk', 'laugh', 'cry', 'shout', 'yell', 'scream', 
+        'baby', 'child', 'cough', 'sneeze', 'domestic', 'vacuum', 'blender', 
+        'water', 'dish', 'cook', 'fry', 'chop', 'music', 'tv', 'television', 'radio', 
+        'instrument', 'piano', 'guitar', 'phone', 'ring', 'alarm', 'clock', 
+        'dog', 'bark', 'cat', 'meow', 'pet'
+    ]
 };
+
+// [Helper] Map detected label to research category
+function mapToResearchCategory(yamnetLabel) {
+    const labelLower = yamnetLabel.toLowerCase();
+    
+    for (const [category, keywords] of Object.entries(CLASS_MAPPING)) {
+        if (keywords.some(k => labelLower.includes(k))) {
+            return category; // 'floor', 'air', 'road', 'train', 'home'
+        }
+    }
+    return 'noise'; // Unclassified
+}
 
 // Korean Translation Map for Common Classes
 const YAMNET_KO_MAP = {
@@ -564,6 +625,20 @@ function initProbChart() {
     });
 }
 
+// 1. Custom Model State
+let myCustomModel = null;
+
+async function loadCustomModel() {
+    try {
+        // Path to the converted model.json (Placeholder path)
+        // Ensure this file exists in your assets or public directory
+        // myCustomModel = await tf.loadLayersModel('assets/my_noise_model/model.json');
+        console.log("ℹ️ Custom model check skipped (File not present yet). Using YAMNet base.");
+    } catch (e) {
+        console.warn("Custom model load failed (Using YAMNet):", e);
+    }
+}
+
 async function analyzeNoiseCharacteristics() {
     // Safety check
     if (!yamnetModel) return { label: 'none', score: 0 };
@@ -587,20 +662,32 @@ async function analyzeNoiseCharacteristics() {
     
     // UI Feedback: Start Processing (Removed to prevent flickering)
     const recEl = document.getElementById('ai-step-recognition');
-    // if (recEl) recEl.textContent = "⚡ AI 분석 중...";
 
     try {
         const inputData = yamnetAudioBuffer.slice(yamnetAudioBuffer.length - YAMNET_INPUT_SIZE);
         const inputTensor = tf.tensor(inputData); // 1D Tensor [16000]
         
-        // Execute Model with Race Timeout (2s limit for stability)
+        let bestCategory = 'none';
+        let categoryScore = 0;
+        let detectedSoundName = '';
+        let topPredictions = [];
+
+        // [Step 1] YAMNet Execution
         const scores = await Promise.race([
             (async () => {
                 const results = yamnetModel.execute(inputTensor);
-                const scoreTensor = Array.isArray(results) ? results[0] : results;
+                // If model returns embeddings, handle it (YAMNet TFHub usually returns [scores, embeddings, spectrogram])
+                // But tfjs-models/yamnet implementation might differ. 
+                // Assuming standard GraphModel outputting scores.
+                const scoreTensor = Array.isArray(results) ? results[0] : results; 
                 const data = await scoreTensor.data();
+                
+                // If we want embeddings for Custom Model later:
+                // const embeddings = Array.isArray(results) ? results[1] : null; 
+                
                 if (Array.isArray(results)) results.forEach(t => t.dispose());
                 else results.dispose();
+                
                 return data;
             })(),
             new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 2000))
@@ -608,7 +695,14 @@ async function analyzeNoiseCharacteristics() {
 
         inputTensor.dispose();
 
-        // Process Results
+        // [Step 2] Custom Model Logic (Placeholder for Transfer Learning)
+        if (myCustomModel) {
+            // const embeddingTensor = ...; 
+            // const customPred = myCustomModel.predict(embeddingTensor);
+            // ... Logic to override 'scores' or 'bestCategory' ...
+        }
+
+        // Process YAMNet Results
         const predictions = [];
         for(let i=0; i<scores.length; i++) {
             if (YAMNET_CLASSES[i]) {
@@ -622,26 +716,20 @@ async function analyzeNoiseCharacteristics() {
         
         // Sort
         predictions.sort((a, b) => b.probability - a.probability);
-        const topPredictions = predictions.slice(0, 5); // Top 5
+        topPredictions = predictions.slice(0, 5); // Top 5
 
-        // Determine Category (Check top 3 results)
-        let bestCategory = 'none';
-        let categoryScore = 0;
-        let detectedSoundName = topPredictions[0].koName;
+        detectedSoundName = topPredictions[0].koName;
 
+        // Determine Category using Research Mapping
+        // Check top 3 results
         for (const pred of topPredictions.slice(0, 3)) {
-            // Check threshold for valid detection (e.g. > 10%)
             if (pred.probability < 0.1) continue; 
 
-            const labelLower = pred.className.toLowerCase();
-            for (const [category, keywords] of Object.entries(CLASS_MAPPING)) {
-                if (keywords.some(k => labelLower.includes(k))) {
-                    if (pred.probability > categoryScore) {
-                        categoryScore = pred.probability;
-                        bestCategory = category;
-                        detectedSoundName = pred.koName; // Keep the specific sound name
-                    }
-                }
+            const mappedCat = mapToResearchCategory(pred.className);
+            if (mappedCat !== 'noise' && pred.probability > categoryScore) {
+                categoryScore = pred.probability;
+                bestCategory = mappedCat;
+                detectedSoundName = pred.koName; 
             }
         }
 
