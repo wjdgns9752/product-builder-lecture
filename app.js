@@ -2426,17 +2426,11 @@ function renderReport() {
 
 
 // --- Demo Data Population (For Visualization) ---
-
-
-
 function populateDemoData() {
-
-
+    // ABORT if real monitoring is active to prevent data corruption
+    if (isMonitoring) return; 
 
     console.log("Populating Demo Data...");
-
-
-
     const now = new Date();
 
 
