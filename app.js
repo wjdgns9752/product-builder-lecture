@@ -2307,11 +2307,424 @@ function renderReport() {
     }
 }
 
-// Hook into existing view switch logic
+    // Hook into existing view switch logic
+
 navItems.forEach(nav => {
+
     nav.addEventListener('click', () => {
+
         if (nav.dataset.target === 'view-report') {
+
             renderReport();
+
         }
+
     });
+
 });
+
+
+
+// --- Demo Data Population (For Visualization) ---
+
+
+
+function populateDemoData() {
+
+
+
+    console.log("Populating Demo Data...");
+
+
+
+    const now = new Date();
+
+
+
+    const currentHour = now.getHours();
+
+
+
+
+
+
+
+    // 1. Report Data (dailyStats)
+
+
+
+    // Only populate if empty
+
+
+
+    if (dailyStats.dayEvents === 0 && dailyStats.nightEvents === 0) {
+
+
+
+        // Generate realistic pattern: Quiet night, busy rush hours, moderate day
+
+
+
+        const sources = ['도로교통', '층간소음', '말소리', '항공기', '지하철'];
+
+
+
+        
+
+
+
+        for (let h = 0; h < 24; h++) {
+
+
+
+            // Determine activity level (0-1)
+
+
+
+            let activity = 0.1;
+
+
+
+            if (h >= 7 && h <= 9) activity = 0.9; // Morning Rush
+
+
+
+            else if (h >= 18 && h <= 20) activity = 0.8; // Evening Rush
+
+
+
+            else if (h >= 10 && h <= 17) activity = 0.5; // Day
+
+
+
+            
+
+
+
+            // Events count
+
+
+
+            const count = Math.floor(Math.random() * 10 * activity);
+
+
+
+            dailyStats.hourly[h].count = count;
+
+
+
+            
+
+
+
+            // Stats
+
+
+
+            if (h >= 6 && h < 22) {
+
+
+
+                dailyStats.dayEvents += count;
+
+
+
+                dailyStats.daySumDb += (50 + activity * 20) * count; 
+
+
+
+                dailyStats.dayCount += count;
+
+
+
+            } else {
+
+
+
+                dailyStats.nightEvents += count;
+
+
+
+                dailyStats.nightSumDb += (40 + activity * 10) * count;
+
+
+
+                dailyStats.nightCount += count;
+
+
+
+            }
+
+
+
+
+
+
+
+            // Max dB & Metrics
+
+
+
+            dailyStats.hourly[h].maxDb = 50 + (activity * 40) + (Math.random() * 10);
+
+
+
+            
+
+
+
+            // Fake Harmonica Index history (30 mins samples per hour)
+
+
+
+            if (!dailyStats.metrics.harmonica[h]) dailyStats.metrics.harmonica[h] = [];
+
+
+
+            for(let i=0; i<6; i++) {
+
+
+
+                dailyStats.metrics.harmonica[h].push(5 + (activity * 50) + (Math.random() * 20));
+
+
+
+            }
+
+
+
+        }
+
+
+
+
+
+
+
+        // Source Distribution
+
+
+
+        for(let i=0; i<50; i++) {
+
+
+
+            const src = sources[Math.floor(Math.random() * sources.length)];
+
+
+
+            dailyStats.sourceCounts[src] = (dailyStats.sourceCounts[src] || 0) + 1;
+
+
+
+        }
+
+
+
+
+
+
+
+        // Event Log (Last 10 events)
+
+
+
+        for(let i=0; i<10; i++) {
+
+
+
+            const h = Math.max(0, currentHour - Math.floor(i/2));
+
+
+
+            const min = Math.floor(Math.random() * 60);
+
+
+
+            const timeStr = `${h}:${min < 10 ? '0'+min : min}:00`;
+
+
+
+            const label = sources[Math.floor(Math.random() * sources.length)];
+
+
+
+            dailyStats.events.push({
+
+
+
+                time: timeStr,
+
+
+
+                label: label,
+
+
+
+                maxDb: 60 + Math.random() * 30,
+
+
+
+                hi: 50 + Math.random() * 40
+
+
+
+            });
+
+
+
+        }
+
+
+
+        
+
+
+
+        saveDailyStats();
+
+
+
+    }
+
+
+
+
+
+
+
+    // 2. Map Data (noiseHistory)
+
+
+
+    if (noiseHistory.length === 0) {
+
+
+
+        const centerLat = 37.5665;
+
+
+
+        const centerLng = 126.9780;
+
+
+
+        
+
+
+
+        for(let i=0; i<10; i++) {
+
+
+
+            const lat = centerLat + (Math.random() - 0.5) * 0.01;
+
+
+
+            const lng = centerLng + (Math.random() - 0.5) * 0.01;
+
+
+
+            const db = 45 + Math.random() * 40;
+
+
+
+            noiseHistory.push({ lat, lng, db, marker: null });
+
+
+
+        }
+
+
+
+        saveMapData();
+
+
+
+    }
+
+
+
+
+
+
+
+    // 3. Analysis Data (dbBuffer)
+
+
+
+    if (dbBuffer.length === 0) {
+
+
+
+        // Fill buffer with 300 points (~30 seconds)
+
+
+
+        let val = 50;
+
+
+
+        for(let i=0; i<300; i++) {
+
+
+
+            val += (Math.random() - 0.5) * 5;
+
+
+
+            if (val < 40) val = 40;
+
+
+
+            if (val > 80) val = 80;
+
+
+
+            dbBuffer.push(val);
+
+
+
+        }
+
+
+
+        
+
+
+
+        // Force update analysis UI
+
+
+
+        updateAnalysis();
+
+
+
+    }
+
+
+
+}
+
+
+
+
+
+
+
+// Run Demo Data Population on Load
+
+
+
+// (Wrapped in timeout to ensure other inits are done)
+
+
+
+setTimeout(populateDemoData, 1500);
+
+
+
+
+
+
