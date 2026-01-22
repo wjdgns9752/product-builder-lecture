@@ -87,22 +87,26 @@ window.stopMonitoring = window.toggleMonitoring;
 
 // Auto-bind on load (Safety net)
 document.addEventListener('DOMContentLoaded', () => {
-    console.log("App Version: 20260121_FINAL_V4 (Chart Fix)");
+    console.log("App Version: 20260121_FINAL_V5 (Button Fix)");
     
     // Init Chart immediately if possible
     if (typeof initProbChart === 'function') {
         initProbChart();
-            initHarmonicaChart();
+        if(typeof initHarmonicaChart === 'function') initHarmonicaChart();
     } else {
-        // Retry if defined later (though it should be hoisted)
-        setTimeout(() => { if(typeof initProbChart === 'function') initProbChart();
-            initHarmonicaChart(); }, 1000);
+        setTimeout(() => { 
+            if(typeof initProbChart === 'function') initProbChart();
+            if(typeof initHarmonicaChart === 'function') initHarmonicaChart(); 
+        }, 1000);
     }
 
+    // Robust Button Binding
     const btn = document.getElementById('init-btn');
     if(btn) {
-        btn.onclick = window.startMonitoring;
-        console.log("Button event bound via DOMContentLoaded");
+        btn.onclick = window.toggleMonitoring; 
+        console.log("Button event bound to toggleMonitoring");
+    } else {
+        console.error("Critical: init-btn not found in DOM");
     }
 });
 
