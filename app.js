@@ -2694,86 +2694,64 @@ function populateDemoData() {
 
 
     // 2. Map Data (noiseHistory)
-
-
-
-    if (noiseHistory.length === 0) {
-
-
-
+    if (noiseHistory.length < 5) { // Relaxed condition
         const centerLat = 37.5665;
-
-
-
         const centerLng = 126.9780;
-
-
-
         
-
-
-
         for(let i=0; i<10; i++) {
-
-
-
             const lat = centerLat + (Math.random() - 0.5) * 0.01;
-
-
-
             const lng = centerLng + (Math.random() - 0.5) * 0.01;
-
-
-
             const db = 45 + Math.random() * 40;
-
-
-
             noiseHistory.push({ lat, lng, db, marker: null });
-
-
-
         }
-
-
-
         saveMapData();
-
-
-
     }
 
+    // 3. Analysis Data (dbBuffer & Charts)
+    // Check if buffer is empty OR if we need to force visuals for demo
+    // If buffer is small (< 50) or average level is very low (silence), inject demo data
+    const isSilent = dbBuffer.length > 0 && (dbBuffer.reduce((a,b)=>a+b,0)/dbBuffer.length < 35);
+    
+    if (dbBuffer.length < 50 || isSilent) {
+        // Fill buffer with interesting dummy data
+        dbBuffer.length = 0; // Clear existing silence
+        let val = 50;
+        for(let i=0; i<300; i++) {
+            val += (Math.random() - 0.5) * 10;
+            if (val < 40) val = 40;
+            if (val > 80) val = 80;
+            if (Math.random() > 0.95) val += 15; // Random peaks
+            dbBuffer.push(val);
+        }
+        
+        // Force init charts if missing
+        if (!harmonicaChart && typeof initHarmonicaChart === 'function') initHarmonicaChart();
+        if (!doseChart && typeof initDoseChart === 'function') initDoseChart();
 
+        // Populate Harmonica Chart History
+        if (harmonicaChart) {
+            const dataLen = harmonicaChart.data.labels.length; // usually 30
+            const dHarmonica = harmonicaChart.data.datasets[0].data;
+            const dIntrusive = harmonicaChart.data.datasets[1].data;
+            const dIR = harmonicaChart.data.datasets[2].data;
 
+            for(let i=0; i<dataLen; i++) {
+                dHarmonica[i] = 50 + Math.random() * 20;
+                dIntrusive[i] = 10 + Math.random() * 10;
+                dIR[i] = 5 + Math.random() * 5;
+            }
+            harmonicaChart.update();
+        }
 
+        // Populate Dose Chart Point
+        if (doseChart) {
+            updateDoseVisuals(65, 'Road Traffic');
+        }
 
-
-
-        // 3. Analysis Data (dbBuffer & Charts)
-
-
-
-
-
-
-
-        if (dbBuffer.length === 0) {
-
-
-
-
-
-
-
-            // Fill buffer with 300 points (~30 seconds)
-
-
-
-
-
-
-
-            let val = 50;
+        // Force update analysis UI text
+        updateAnalysis();
+    }
+}
 
 
 
