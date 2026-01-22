@@ -26,7 +26,13 @@ window.startMonitoring = async function() {
     }
 
     try {
-        await startAudio();
+        const result = await startAudio();
+        if(btn) {
+            btn.disabled = false; // Always re-enable
+            if (!result) {
+                 btn.textContent = "모니터링 시작";
+            }
+        }
     } catch (e) {
         console.error("Critical Start Error:", e);
         alert(`❌ 실행 오류: ${e.message}`);
@@ -1910,14 +1916,18 @@ navItems.forEach(nav => {
         
         // Special Init for Analysis
         if (targetId === 'view-analysis') {
-            if (!doseChart) {
-                initDoseChart();
-            }
+            if (!doseChart) initDoseChart();
+            if (!harmonicaChart) initHarmonicaChart();
+            
+            // Force resize/update for charts that were hidden
+            setTimeout(() => {
+                if (doseChart) { doseChart.resize(); doseChart.update(); }
+                if (harmonicaChart) { harmonicaChart.resize(); harmonicaChart.update(); }
+            }, 50);
+
             // Update analysis with current buffer data
             updateAnalysis();
             if (currentVolumeValue > 0) {
-                // Determine source for dose visuals update
-                // (Using the last detected or default to none)
                 updateDoseVisuals(currentVolumeValue, 'none'); 
             }
         }
