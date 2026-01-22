@@ -2764,6 +2764,13 @@ function populateDemoData() {
     
     // Force update Report UI with demo data
     renderReport();
+
+    // OPTIONAL: If user is on a "blank" view, refresh it
+    const activeView = document.querySelector('.view.active');
+    if (activeView && activeView.id === 'view-analysis') {
+        if(doseChart) doseChart.update();
+        if(harmonicaChart) harmonicaChart.update();
+    }
 }
 
 // Run Demo Data Population on Load
