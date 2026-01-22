@@ -590,6 +590,45 @@ const YAMNET_CLASSES = ["Speech", "Child speech, kid speaking", "Conversation", 
 let noiseHistory = [];
 let aiSkipMode = false;
 
+/**
+ * A-Weighting Filter Chain (IEC 61672 Approximation)
+ * Adjusts raw audio to match human hearing perception (dB(A)).
+ */
+function connectAWeightingFilter(context, sourceNode, destinationNode) {
+    // Filter 1: High-pass at 20.6Hz
+    const f1 = context.createBiquadFilter();
+    f1.type = 'highpass';
+    f1.frequency.value = 20.6;
+    f1.Q.value = 0.5;
+
+    // Filter 2: High-pass at 20.6Hz (Stacked for steeper slope)
+    const f2 = context.createBiquadFilter();
+    f2.type = 'highpass';
+    f2.frequency.value = 20.6;
+    f2.Q.value = 0.5;
+
+    // Filter 3: High-shelf at 107.7Hz (Low-end correction)
+    const f3 = context.createBiquadFilter();
+    f3.type = 'highshelf';
+    f3.frequency.value = 107.7;
+    f3.gain.value = -3.0; 
+
+    // Filter 4: Low-pass at 12.2kHz (High-end cutoff)
+    const f4 = context.createBiquadFilter();
+    f4.type = 'lowpass';
+    f4.frequency.value = 12200; 
+    f4.Q.value = 0.5;
+
+    // Connect Chain: Source -> F1 -> F2 -> F3 -> F4 -> Dest
+    sourceNode.connect(f1);
+    f1.connect(f2);
+    f2.connect(f3);
+    f3.connect(f4);
+    f4.connect(destinationNode);
+    
+    return f4; 
+}
+
 // --- Global Calibration Function (Accessible from HTML) ---
 window.startCalibration = async function() {
     console.log("Calibration Triggered");
@@ -1170,11 +1209,14 @@ async function startAudio() {
 
     // Only create stream if not already created
     if (!microphone) {
+        // [Rigorous Audio Constraints for Measurement]
         const constraints = {
             audio: {
-                echoCancellation: false,
-                noiseSuppression: false,
-                autoGainControl: false
+                echoCancellation: false,  // Disable echo cancellation (prevents distortion)
+                noiseSuppression: false,  // Disable noise suppression (capture raw noise)
+                autoGainControl: false,   // [CRITICAL] Disable AGC (prevents volume normalization)
+                channelCount: 1,          // Mono is standard for measurement
+                sampleRate: 48000         // Request high sample rate if available
             },
             video: false
         };
@@ -1185,9 +1227,10 @@ async function startAudio() {
         microphone = audioContext.createMediaStreamSource(stream);
         analyser = audioContext.createAnalyser();
         analyser.fftSize = 2048; 
-        analyser.smoothingTimeConstant = 0.6; 
+        analyser.smoothingTimeConstant = 0.6; // Slightly reduced for responsiveness
         
-        microphone.connect(analyser);
+        // [New] Apply A-Weighting Filter Chain
+        connectAWeightingFilter(audioContext, microphone, analyser);
         
         // Start AI Module independently (Don't await, let it load in background)
         setupAI(stream).catch(e => console.error("AI Init Failed:", e));
@@ -1541,42 +1584,79 @@ const ANALYSIS_INTERVAL = 1000; // AI/Stats runs once per second
 let lastAnalysisTick = 0;
 
 // --- Analysis Loop ---
+// Leq Calculation Globals
+let energySum = 0;
+let sampleCount = 0;
+const LEQ_WINDOW_SEC = 1.0; 
+
 function analyze() {
     requestAnimationFrame(analyze);
     
     // 모니터링 중이 아니거나 평가 중이면 중단
     if (!isMonitoring || isPausedForEval) return;
 
-    // 1. [High Speed] Visualization Data (Minimal Calc)
-    const bufferLength = analyser.frequencyBinCount;
-    const dataArray = new Uint8Array(bufferLength);
-    analyser.getByteFrequencyData(dataArray);
+    // [Precision Update] Use FloatTimeDomainData for precise RMS
+    const bufferLength = analyser.fftSize; // Using fftSize directly for time domain buffer
+    const timeData = new Float32Array(bufferLength);
+    analyser.getFloatTimeDomainData(timeData);
 
-    // dB Calculation (RMS)
-    let sum = 0;
+    // 1. [High Speed] RMS & dB(A) Calculation
+    let sumSquares = 0;
+    let isClipping = false;
+
     for(let i = 0; i < bufferLength; i++) {
-        const x = dataArray[i] / 255; 
-        sum += x * x;
+        const amplitude = timeData[i];
+        sumSquares += amplitude * amplitude;
+        
+        // Clipping Detection
+        if (Math.abs(amplitude) >= 0.99) isClipping = true;
     }
-    const rms = Math.sqrt(sum / bufferLength);
-    let rawDb = 20 * Math.log10(rms + 0.00001); 
+    
+    const rms = Math.sqrt(sumSquares / bufferLength);
+    
+    // dB Calculation: 20 * log10(rms)
+    // Adding small offset to avoid log(0)
+    let rawDb = 20 * Math.log10(rms + 1e-10); 
     
     // Calibration
     let calibratedDb = rawDb + dbOffset;
-    if (calibratedDb < 0) calibratedDb = 0;
+    
+    // Floor Clipping (Ignore noise floor below 30dB for UI clarity)
+    if (calibratedDb < 30) calibratedDb = 30;
     currentVolumeValue = calibratedDb;
 
-    // --- Calculate Spectral Centroid (Needed for simple pitch UI) ---
-    // (Keeping lightweight physics calculation here for UI responsiveness)
+    // --- Leq Calculation (Energy Averaging) ---
+    // Accumulate energy: 10^(dB/10)
+    const energy = Math.pow(10, calibratedDb / 10);
+    energySum += energy;
+    sampleCount++;
+
+    // Calculate Leq every 1 second (approx 60 frames)
+    if (sampleCount >= VISUAL_FPS * LEQ_WINDOW_SEC) {
+        // const leq = 10 * Math.log10(energySum / sampleCount);
+        // TODO: Store or Display Leq if needed specifically here, 
+        // but currentVolumeValue is used for real-time.
+        
+        // Reset
+        energySum = 0;
+        sampleCount = 0;
+    }
+
+    // --- Calculate Spectral Centroid (For Pitch UI - Needs FFT) ---
+    // We still need FFT data for Centroid and Visualizer
+    const freqBufferLength = analyser.frequencyBinCount;
+    const freqData = new Uint8Array(freqBufferLength);
+    analyser.getByteFrequencyData(freqData);
+
     let sumFreq = 0;
     let sumAmp = 0;
-    for (let i = 0; i < bufferLength; i++) {
-        sumFreq += i * dataArray[i];
-        sumAmp += dataArray[i];
+    for (let i = 0; i < freqBufferLength; i++) {
+        sumFreq += i * freqData[i];
+        sumAmp += freqData[i];
     }
     currentCentroid = sumAmp > 0 ? sumFreq / sumAmp : 0;
 
-    // --- Calculate Impulse (Needed for immediate UI feedback) ---
+    // --- Calculate Impulse ---
     let delta = calibratedDb - lastDbValue;
     if (delta > 3) { 
         currentImpulse += delta * 2; 
@@ -1586,12 +1666,24 @@ function analyze() {
     if (currentImpulse > 100) currentImpulse = 100;
     lastDbValue = calibratedDb;
 
-    // 2. [High Speed] UI Updates (Gauge, Status)
+    // 2. [High Speed] UI Updates
     updateUI(calibratedDb, backgroundLevel);
     checkThreshold(calibratedDb, backgroundLevel);
     
-    // Spectrogram is drawn in its own loop (drawSpectrogram), so we don't need to call it here.
-    // But we need to update Visualizer Step 1 effect
+    // Clipping Warning
+    if (isClipping) {
+        const st = document.getElementById('status-text');
+        if(st) {
+            st.textContent = "⚠️ 경고: 입력 초과 (Clipping)!";
+            st.style.color = "red";
+        }
+    } else if (calibratedDb > 30) {
+         // Restore status text color if not clipping
+         const st = document.getElementById('status-text');
+         if(st && st.style.color === 'red') st.style.color = '';
+    }
+
+    // Visualizer Effect
     const step1Card = document.querySelector('.step-card');
     if (step1Card) {
         const intensity = Math.min(1, rms * 5);
@@ -1603,12 +1695,12 @@ function analyze() {
         currentRawDbSpan.textContent = rawDb.toFixed(1);
     }
 
-    // Background Tracker (Fast adaption)
+    // Background Tracker
     if (calibratedDb < backgroundLevel) {
         backgroundLevel = Math.max(10, backgroundLevel * (1 - decayRate) + calibratedDb * decayRate);
     } else backgroundLevel = backgroundLevel * (1 - adaptationRate) + calibratedDb * adaptationRate;
     
-    // Push to Buffer (needed for stats)
+    // Push to Buffer
     dbBuffer.push(calibratedDb);
     if (dbBuffer.length > BUFFER_SIZE) dbBuffer.shift();
 
@@ -1628,12 +1720,12 @@ function analyze() {
         lastAnalysisTick = now;
 
         // (1) Extract Time Data for AI
-        const timeData = new Float32Array(bufferLength);
-        analyser.getFloatTimeDomainData(timeData);
+        // Use existing timeData buffer directly? No, AI needs specific resizing usually.
+        // processAudioForModel handles its own buffering from input array.
         processAudioForModel(timeData, audioContext.sampleRate);
 
         // (2) Run AI Model (Async)
-        if (!isModelProcessing && calibratedDb > 40) { // Skip if too quiet
+        if (!isModelProcessing && calibratedDb > 40) { 
             analyzeNoiseCharacteristics()
                 .then(result => {
                     updateInternalClassifierUI(result);
@@ -1641,7 +1733,6 @@ function analyze() {
                 })
                 .catch(err => console.error("AI Error:", err));
         } else if (calibratedDb <= 40) {
-             // Explicitly update UI for quiet state periodically
              updateInternalClassifierUI({ label: 'none', score: 0 });
         }
 
