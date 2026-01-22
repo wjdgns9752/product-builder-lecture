@@ -17,31 +17,73 @@ const db = firebase.firestore();
 const auth = firebase.auth();
 
 // --- CRITICAL: Global Function Definition (Must be at the top) ---
-window.startMonitoring = async function() {
-    console.log("Start button clicked (Global)");
+window.toggleMonitoring = async function() {
+    console.log(`Toggle clicked. Current state: ${isMonitoring}`);
     const btn = document.getElementById('init-btn');
-    if(btn) {
-        btn.disabled = true;
+    if (!btn) return;
+
+    // Prevent double-clicks
+    btn.disabled = true;
+
+    if (!isMonitoring) {
+        // --- START SEQUENCE ---
         btn.textContent = "⌛ 초기화 중...";
+        
+        try {
+            const success = await startAudio();
+            if (success) {
+                // Update UI to 'Stop' state
+                btn.textContent = "모니터링 중지";
+                btn.classList.add('recording-active');
+            } else {
+                // Revert to 'Start' state on failure
+                btn.textContent = "모니터링 시작";
+                btn.classList.remove('recording-active');
+            }
+        } catch (e) {
+            console.error("Start Error:", e);
+            alert(`❌ 실행 오류: ${e.message}`);
+            btn.textContent = "모니터링 시작";
+            btn.classList.remove('recording-active');
+        }
+    } else {
+        // --- STOP SEQUENCE ---
+        btn.textContent = "⌛ 중지 중...";
+        
+        try {
+            await stopAudioLogic(); // Extracted stop logic
+            // Update UI to 'Start' state
+            btn.textContent = "모니터링 시작";
+            btn.classList.remove('recording-active');
+        } catch (e) {
+            console.error("Stop Error:", e);
+            // Reset UI anyway
+            btn.textContent = "모니터링 시작";
+            btn.classList.remove('recording-active');
+        }
     }
 
-    try {
-        const result = await startAudio();
-        if(btn) {
-            btn.disabled = false; // Always re-enable
-            if (!result) {
-                 btn.textContent = "모니터링 시작";
-            }
-        }
-    } catch (e) {
-        console.error("Critical Start Error:", e);
-        alert(`❌ 실행 오류: ${e.message}`);
-        if(btn) {
-            btn.disabled = false;
-            btn.textContent = "모니터링 시작";
-        }
-    }
+    // Always re-enable button
+    btn.disabled = false;
 };
+
+// Extracted Stop Logic
+async function stopAudioLogic() {
+    console.log("Stopping monitoring...");
+    isMonitoring = false;
+    
+    if (audioContext && audioContext.state === 'running') {
+        await audioContext.suspend();
+    }
+    
+    if (watchdogTimer) clearInterval(watchdogTimer);
+    
+    statusText.textContent = "상태: 중지됨";
+}
+
+// Aliases for compatibility
+window.startMonitoring = window.toggleMonitoring;
+window.stopMonitoring = window.toggleMonitoring;
 
 // Auto-bind on load (Safety net)
 document.addEventListener('DOMContentLoaded', () => {
@@ -923,13 +965,8 @@ async function startAudio() {
         setupAI(stream).catch(e => console.error("AI Init Failed:", e));
     }
 
-    // UI Update for Active State
-    if (initBtn) {
-        initBtn.textContent = "모니터링 중지";
-        initBtn.classList.add('recording-active'); // Add style class for visual feedback
-        initBtn.style.display = 'block'; // Keep it visible
-        initBtn.onclick = window.stopMonitoring; // Change action
-    }
+    // UI Update for Active State (Handled by toggleMonitoring now)
+    // if (initBtn) { ... }
 
     recordBtn.classList.remove('hidden'); // Show record button
     // quickCalibBtn stays visible at all times
@@ -975,12 +1012,7 @@ async function startAudio() {
             microphone.connect(analyser);
         }
         
-        if (initBtn) {
-            initBtn.textContent = "모니터링 중지";
-            initBtn.classList.add('recording-active');
-            initBtn.style.display = 'block';
-            initBtn.onclick = window.stopMonitoring;
-        }
+        // Fallback UI logic removed
 
         // quickCalibBtn stays visible
         
@@ -996,29 +1028,8 @@ async function startAudio() {
   }
 }
 
-// Stop Monitoring Function
-window.stopMonitoring = async function() {
-    console.log("Stopping monitoring...");
-    isMonitoring = false;
-    
-    if (audioContext && audioContext.state === 'running') {
-        await audioContext.suspend();
-    }
-    
-    if (watchdogTimer) clearInterval(watchdogTimer);
-    
-    // UI Reset
-    if (initBtn) {
-        initBtn.textContent = "모니터링 시작";
-        initBtn.disabled = false;
-        initBtn.classList.remove('recording-active');
-        initBtn.onclick = window.startMonitoring; // Reset action
-    }
-    
-    statusText.textContent = "상태: 중지됨";
-    // Optional: Hide record button if we want to fully reset
-    // recordBtn.classList.add('hidden'); 
-};
+// Stop Monitoring Function (Redundant, removed)
+// window.stopMonitoring handled by toggleMonitoring alias
 
 // --- Recorder Logic ---
 function startRecording() {
