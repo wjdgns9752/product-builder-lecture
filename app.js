@@ -2235,7 +2235,7 @@ function updateDailyStats(db, metrics, eventLabel) {
 function initReportCharts() {
     // Hourly Events Chart
     const ctxHourly = document.getElementById('hourlyEventsChart');
-    if (ctxHourly) {
+    if (ctxHourly && !reportCharts.hourly) {
         reportCharts.hourly = new Chart(ctxHourly, {
             type: 'line',
             data: {
@@ -2259,7 +2259,7 @@ function initReportCharts() {
 
     // Day/Night Chart
     const ctxDN = document.getElementById('dayNightChart');
-    if (ctxDN) {
+    if (ctxDN && !reportCharts.dn) {
         reportCharts.dn = new Chart(ctxDN, {
             type: 'doughnut',
             data: {
@@ -2275,7 +2275,7 @@ function initReportCharts() {
 
     // Source Distribution Chart
     const ctxSource = document.getElementById('sourceDistChart');
-    if (ctxSource) {
+    if (ctxSource && !reportCharts.source) {
         reportCharts.source = new Chart(ctxSource, {
             type: 'doughnut',
             data: {
@@ -2291,7 +2291,7 @@ function initReportCharts() {
 
     // Metrics Trend Chart
     const ctxMetrics = document.getElementById('dailyMetricsChart');
-    if (ctxMetrics) {
+    if (ctxMetrics && !reportCharts.metrics) {
         reportCharts.metrics = new Chart(ctxMetrics, {
             type: 'bar',
             data: {
@@ -2307,30 +2307,32 @@ function initReportCharts() {
 }
 
 function renderReport() {
+    // Ensure charts are init
+    initReportCharts();
+
     // 1. Stats
     const dayAvg = dailyStats.dayCount > 0 ? (dailyStats.daySumDb / dailyStats.dayCount).toFixed(1) : '-';
     const nightAvg = dailyStats.nightCount > 0 ? (dailyStats.nightSumDb / dailyStats.nightCount).toFixed(1) : '-';
     
-    document.getElementById('report-total-events').textContent = dailyStats.dayEvents + dailyStats.nightEvents;
-    document.getElementById('report-day-avg').textContent = dayAvg;
-    document.getElementById('report-night-avg').textContent = nightAvg;
+    const totalEl = document.getElementById('report-total-events');
+    const dayEl = document.getElementById('report-day-avg');
+    const nightEl = document.getElementById('report-night-avg');
+    
+    if(totalEl) totalEl.textContent = dailyStats.dayEvents + dailyStats.nightEvents;
+    if(dayEl) dayEl.textContent = dayAvg;
+    if(nightEl) nightEl.textContent = nightAvg;
 
-    // 2. Charts
-    if (!reportCharts.hourly) initReportCharts();
-
-    // Hourly
+    // 2. Charts Update
     if (reportCharts.hourly) {
         reportCharts.hourly.data.datasets[0].data = dailyStats.hourly.map(h => h.count);
         reportCharts.hourly.update();
     }
 
-    // Day/Night
     if (reportCharts.dn) {
         reportCharts.dn.data.datasets[0].data = [dailyStats.dayEvents, dailyStats.nightEvents];
         reportCharts.dn.update();
     }
 
-    // Source
     if (reportCharts.source) {
         const sources = Object.keys(dailyStats.sourceCounts);
         const sourceData = Object.values(dailyStats.sourceCounts);
@@ -2339,7 +2341,6 @@ function renderReport() {
         reportCharts.source.update();
     }
 
-    // Metrics
     if (reportCharts.metrics) {
         const avgHI = dailyStats.metrics.harmonica.map(arr => {
             if (!arr || arr.length === 0) return 0;
@@ -2760,6 +2761,9 @@ function populateDemoData() {
         // Force update analysis UI text
         updateAnalysis();
     }
+    
+    // Force update Report UI with demo data
+    renderReport();
 }
 
 // Run Demo Data Population on Load
