@@ -2649,39 +2649,299 @@ function populateDemoData() {
 
 
 
-    // 3. Analysis Data (dbBuffer)
+        // 3. Analysis Data (dbBuffer & Charts)
 
 
 
-    if (dbBuffer.length === 0) {
 
 
 
-        // Fill buffer with 300 points (~30 seconds)
+
+        if (dbBuffer.length === 0) {
 
 
 
-        let val = 50;
 
 
 
-        for(let i=0; i<300; i++) {
+
+            // Fill buffer with 300 points (~30 seconds)
 
 
 
-            val += (Math.random() - 0.5) * 5;
 
 
 
-            if (val < 40) val = 40;
+
+            let val = 50;
 
 
 
-            if (val > 80) val = 80;
 
 
 
-            dbBuffer.push(val);
+
+            for(let i=0; i<300; i++) {
+
+
+
+
+
+
+
+                val += (Math.random() - 0.5) * 5;
+
+
+
+
+
+
+
+                if (val < 40) val = 40;
+
+
+
+
+
+
+
+                if (val > 80) val = 80;
+
+
+
+
+
+
+
+                dbBuffer.push(val);
+
+
+
+
+
+
+
+            }
+
+
+
+
+
+
+
+            
+
+
+
+
+
+
+
+            // Force init charts if missing
+
+
+
+
+
+
+
+            if (!harmonicaChart && typeof initHarmonicaChart === 'function') initHarmonicaChart();
+
+
+
+
+
+
+
+            if (!doseChart && typeof initDoseChart === 'function') initDoseChart();
+
+
+
+
+
+
+
+    
+
+
+
+
+
+
+
+            // Populate Harmonica Chart History
+
+
+
+
+
+
+
+            if (harmonicaChart) {
+
+
+
+
+
+
+
+                const dataLen = harmonicaChart.data.labels.length; // usually 30
+
+
+
+
+
+
+
+                const dHarmonica = harmonicaChart.data.datasets[0].data;
+
+
+
+
+
+
+
+                const dIntrusive = harmonicaChart.data.datasets[1].data;
+
+
+
+
+
+
+
+                const dIR = harmonicaChart.data.datasets[2].data;
+
+
+
+
+
+
+
+    
+
+
+
+
+
+
+
+                for(let i=0; i<dataLen; i++) {
+
+
+
+
+
+
+
+                    dHarmonica[i] = 50 + Math.random() * 20;
+
+
+
+
+
+
+
+                    dIntrusive[i] = 10 + Math.random() * 10;
+
+
+
+
+
+
+
+                    dIR[i] = 5 + Math.random() * 5;
+
+
+
+
+
+
+
+                }
+
+
+
+
+
+
+
+                harmonicaChart.update();
+
+
+
+
+
+
+
+            }
+
+
+
+
+
+
+
+    
+
+
+
+
+
+
+
+            // Populate Dose Chart Point
+
+
+
+
+
+
+
+            if (doseChart) {
+
+
+
+
+
+
+
+                updateDoseVisuals(65, 'Road Traffic');
+
+
+
+
+
+
+
+            }
+
+
+
+
+
+
+
+    
+
+
+
+
+
+
+
+            // Force update analysis UI text
+
+
+
+
+
+
+
+            updateAnalysis();
+
+
+
+
 
 
 
@@ -2689,15 +2949,7 @@ function populateDemoData() {
 
 
 
-        
 
-
-
-        // Force update analysis UI
-
-
-
-        updateAnalysis();
 
 
 
@@ -2705,7 +2957,11 @@ function populateDemoData() {
 
 
 
-}
+
+
+
+
+    
 
 
 
