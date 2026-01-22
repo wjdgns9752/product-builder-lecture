@@ -102,8 +102,10 @@
                     </div>
                     
                     <!-- New Probability Chart -->
-                    <div id="ai-prob-chart-container" style="margin-top: 10px; height: 100px; border: 1px solid #ddd; background: #fafafa;">
-                        <canvas id="aiProbChart"></canvas>
+                    <div id="ai-prob-chart-container" style="margin-top: 10px; border: 1px solid #ddd; background: #fafafa;">
+                        <div style="position: relative; height: 120px; width: 100%;">
+                            <canvas id="aiProbChart"></canvas>
+                        </div>
                     </div>
                 </div>
 
@@ -254,7 +256,9 @@
 
                 <div class="chart-container">
                     <h3>😖 예상 불쾌감 (%HA)</h3>
-                    <canvas id="doseResponseChart" style="height: 200px;"></canvas>
+                    <div style="position: relative; height: 250px; width: 100%;">
+                        <canvas id="doseResponseChart"></canvas>
+                    </div>
                     <div id="dose-result" style="margin-top:10px; font-size: 0.9rem; font-weight:bold;">
                         현재 불쾌감 지수: <span id="ha-percent" style="color:var(--accent-color);">0</span>%
                     </div>
@@ -293,9 +297,11 @@
                     </div>
 
                     <!-- Trend Chart -->
-                    <div class="chart-container" style="margin-top: 15px; height: 220px;">
+                    <div class="chart-container" style="margin-top: 15px;">
                         <h4 style="font-size:0.85rem; color:#666; margin-bottom:5px;">🕒 시간대별 변동 추이</h4>
-                        <canvas id="harmonicaTrendChart"></canvas>
+                        <div style="position: relative; height: 200px; width: 100%;">
+                            <canvas id="harmonicaTrendChart"></canvas>
+                        </div>
                     </div>
                 </div>
                 </div> <!-- End of analysis-content -->
@@ -426,26 +432,34 @@
                 </div>
 
                 <!-- Charts -->
-                <div class="chart-container" style="margin-top: 20px; height: 250px;">
+                <div class="chart-container" style="margin-top: 20px;">
                     <h3>🕒 시간대별 소음 발생 빈도</h3>
-                    <canvas id="hourlyEventsChart"></canvas>
+                    <div style="position: relative; height: 250px; width: 100%;">
+                        <canvas id="hourlyEventsChart"></canvas>
+                    </div>
                 </div>
 
                 <div style="display: flex; gap: 10px; margin-top: 20px;">
-                    <div class="chart-container" style="flex: 1; height: 200px;">
+                    <div class="chart-container" style="flex: 1;">
                         <h3 style="font-size: 0.9rem;">☀️/🌙 주야간 비율</h3>
-                        <canvas id="dayNightChart"></canvas>
+                        <div style="position: relative; height: 180px; width: 100%;">
+                            <canvas id="dayNightChart"></canvas>
+                        </div>
                     </div>
-                    <div class="chart-container" style="flex: 1; height: 200px;">
+                    <div class="chart-container" style="flex: 1;">
                         <h3 style="font-size: 0.9rem;">🔊 소음원 분포</h3>
-                        <canvas id="sourceDistChart"></canvas>
+                        <div style="position: relative; height: 180px; width: 100%;">
+                            <canvas id="sourceDistChart"></canvas>
+                        </div>
                     </div>
                 </div>
 
                 <!-- 24H Metrics Trend -->
-                <div class="chart-container" style="margin-top: 20px; height: 250px;">
+                <div class="chart-container" style="margin-top: 20px;">
                     <h3>📈 24H 지표 변화 (Harmonica/IR)</h3>
-                    <canvas id="dailyMetricsChart"></canvas>
+                    <div style="position: relative; height: 250px; width: 100%;">
+                        <canvas id="dailyMetricsChart"></canvas>
+                    </div>
                 </div>
 
                 <!-- Event Log Table -->

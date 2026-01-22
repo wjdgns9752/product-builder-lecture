@@ -731,6 +731,11 @@ function initProbChart() {
     const ctx = document.getElementById('aiProbChart');
     if (!ctx) return;
     
+    if (aiProbChart) {
+        aiProbChart.destroy();
+        aiProbChart = null;
+    }
+
     aiProbChart = new Chart(ctx, {
         type: 'bar',
         data: {
@@ -1652,6 +1657,11 @@ function initHarmonicaChart() {
     const ctx = document.getElementById('harmonicaTrendChart');
     if (!ctx) return;
     
+    if (harmonicaChart) {
+        harmonicaChart.destroy();
+        harmonicaChart = null;
+    }
+
     harmonicaChart = new Chart(ctx, {
         type: 'line',
         data: {
@@ -2326,7 +2336,14 @@ let harmonicaChart = null;
 const doseCtx = document.getElementById('doseResponseChart');
 
 function initDoseChart() {
+    const doseCtx = document.getElementById('doseResponseChart');
     if (!doseCtx) return; 
+
+    // Destroy existing chart to prevent memory leaks and sizing issues
+    if (doseChart) {
+        doseChart.destroy();
+        doseChart = null;
+    }
     
     // Generate Curves Data
     const dbs = [];
@@ -2382,6 +2399,7 @@ function initDoseChart() {
         },
         options: {
             responsive: true,
+            maintainAspectRatio: false, // Core fix for infinite growth
             interaction: { mode: 'index', intersect: false },
             scales: {
                 x: { title: { display: true, text: 'Noise Level (dB)' } },
